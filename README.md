@@ -138,6 +138,149 @@ pnpm start
 pnpm lint
 ```
 
+## 🚀 Despliegue en Ubuntu + Apache (Producción)
+
+> Esta guía asume Ubuntu 22.04/24.04, Apache2 y dominio/subdominio apuntando al servidor.
+
+### 1) Preparar el servidor
+
+```bash
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y git curl apache2
+```
+
+Instalar Node.js 20 LTS (recomendado para Next.js 14):
+
+```bash
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+node -v
+npm -v
+```
+
+Instalar pnpm y PM2:
+
+```bash
+sudo npm install -g pnpm pm2
+pnpm -v
+pm2 -v
+```
+
+### 2) Descargar el repositorio en el servidor
+
+```bash
+sudo mkdir -p /var/www
+cd /var/www
+sudo git clone <URL_DEL_REPO> clinicore-frontend
+sudo chown -R $USER:$USER /var/www/clinicore-frontend
+cd /var/www/clinicore-frontend
+```
+
+### 3) Instalar dependencias y generar build
+
+```bash
+pnpm install --frozen-lockfile
+pnpm build
+```
+
+Esto crea la compilación de producción de Next.js en `.next/`.
+
+### 4) Levantar la app Next.js con PM2 (monitoreo + reinicio automático)
+
+```bash
+cd /var/www/clinicore-frontend
+pm2 start "pnpm start -- -p 3000" --name clinicore-front
+pm2 save
+pm2 startup
+```
+
+Comandos útiles de monitoreo:
+
+```bash
+pm2 status
+pm2 logs clinicore-front
+pm2 monit
+pm2 restart clinicore-front
+```
+
+### 5) Configurar Apache como Reverse Proxy hacia Next.js
+
+Habilitar módulos:
+
+```bash
+sudo a2enmod proxy proxy_http proxy_wstunnel headers rewrite ssl
+sudo systemctl restart apache2
+```
+
+Crear virtual host `/etc/apache2/sites-available/clinicore-front.conf`:
+
+```apache
+<VirtualHost *:80>
+    ServerName tu-dominio.com
+    ServerAlias www.tu-dominio.com
+
+    ProxyPreserveHost On
+    ProxyPass / http://127.0.0.1:3000/
+    ProxyPassReverse / http://127.0.0.1:3000/
+
+    # WebSocket (si aplica)
+    RewriteEngine On
+    RewriteCond %{HTTP:Upgrade} =websocket [NC]
+    RewriteRule /(.*) ws://127.0.0.1:3000/$1 [P,L]
+
+    ErrorLog ${APACHE_LOG_DIR}/clinicore-front-error.log
+    CustomLog ${APACHE_LOG_DIR}/clinicore-front-access.log combined
+</VirtualHost>
+```
+
+Activar el sitio:
+
+```bash
+sudo a2ensite clinicore-front.conf
+sudo a2dissite 000-default.conf
+sudo apache2ctl configtest
+sudo systemctl reload apache2
+```
+
+### 6) SSL con Let's Encrypt (recomendado)
+
+```bash
+sudo apt install -y certbot python3-certbot-apache
+sudo certbot --apache -d tu-dominio.com -d www.tu-dominio.com
+sudo systemctl status certbot.timer
+```
+
+### 7) Flujo de actualización (deploy continuo manual)
+
+Cada vez que publiques cambios:
+
+```bash
+cd /var/www/clinicore-frontend
+git pull origin main
+pnpm install --frozen-lockfile
+pnpm build
+pm2 restart clinicore-front
+```
+
+### 8) Archivos y logs clave para soporte/monitoreo
+
+- App Next.js: `/var/www/clinicore-frontend`
+- Build: `/var/www/clinicore-frontend/.next`
+- Logs PM2: `~/.pm2/logs/`
+- Logs Apache: `/var/log/apache2/clinicore-front-*.log`
+
+---
+
+### Opción alternativa (sitio estático)
+
+Si más adelante quieres desplegar como estático en Apache sin proceso Node:
+
+1. Configura `output: "export"` en `next.config.js`.
+2. Ejecuta `pnpm build`.
+3. Publica la carpeta `out/` en el `DocumentRoot` de Apache.
+
+> Nota: esta opción no sirve para funcionalidades que dependan de renderizado dinámico en servidor.
+
 ## 🎨 Personalización
 
 ### Colores
