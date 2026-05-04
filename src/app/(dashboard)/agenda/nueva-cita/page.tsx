@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import DashboardLayout from '@/components/layout/DashboardLayout';
+
 import {
   citasApi, pacientesApi, usuariosApi, sucursalesApi,
   type CrearCitaDto, type Paciente, type Usuario, type Sucursal
@@ -95,7 +95,7 @@ export default function NuevaCitaPage() {
     ${hasError ? 'border-red-300 bg-red-50' : 'border-gray-200 focus:border-cyan-400'}`;
 
   return (
-    <DashboardLayout>
+      <>
       <div className="relative min-h-screen overflow-hidden">
 
         {/* Fondo decorativo */}
@@ -274,6 +274,6 @@ export default function NuevaCitaPage() {
           </div>
         </form>
       </div>
-    </DashboardLayout>
+    </>    
   );
 }
