@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import DashboardLayout from '@/components/layout/DashboardLayout';
+
 import { citasApi, type Cita, type EstadoCita } from '@/lib/api';
 import {
   Calendar, Plus, Clock, User, MapPin, Dog,
@@ -79,7 +79,8 @@ export default function AgendaPage() {
     a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
   return (
-    <DashboardLayout>
+    
+      <>
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
@@ -143,6 +144,7 @@ export default function AgendaPage() {
               const esHoy      = esMismaFecha(dia, hoy);
               const esSelec    = diaSeleccionado && esMismaFecha(dia, diaSeleccionado);
               return (
+                <>
                 <button
                   key={i}
                   onClick={() => setDiaSeleccionado(esSelec ? null : dia)}
@@ -270,6 +272,6 @@ export default function AgendaPage() {
           )}
         </div>
       </div>
-    </DashboardLayout>
+    </>    
   );
 }

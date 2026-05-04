@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import DashboardLayout from '@/components/layout/DashboardLayout';
 
 export const metadata: Metadata = {
   title: 'Clinicore - Sistema Veterinario',
@@ -14,11 +13,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="es">
-      <body>
-        <DashboardLayout>
-          {children}
-        </DashboardLayout>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
