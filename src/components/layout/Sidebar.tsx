@@ -12,14 +12,14 @@ import {
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/" },
-  { icon: Package, label: "Inventario", href: "/inventario" },
+  /* { icon: Package, label: "Inventario", href: "/inventario" }, */
   {
     icon: Bone, label: "Productos", href: "/productos", submenu: true,
     subItems: [
-      { label: "Lista de Productos", href: "/productos/listar",  icon: List      },
+      { label: "Ver Todos", href: "/productos/listar",  icon: List      },
       { label: "Crear Producto",     href: "/productos/nuevo",   icon: PlusCircle },
-      { label: "Generar Reporte",    href: "/productos/reporte", icon: FileDown   },
       { label: "Editar Producto",    href: "/productos/editar",  icon: Edit3      },
+      { label: "Generar Reporte",    href: "/productos/reporte", icon: FileDown   },
     ]
   },
   {

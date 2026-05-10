@@ -7,8 +7,8 @@ export default function ProductosPage() {
     <div className="p-6">
       < Breadcrumbs />
       <h1 className="text-2xl font-bold mb-6 text-cyan-600">Gestión de Productos</h1>
-      <p>Dashboard de Productos</p>
-      <InventarioOverview />
+      {/* <p>Dashboard de Productos</p>
+      <InventarioOverview /> */}
       <hr />
       <ListaProductos />
     </div>
