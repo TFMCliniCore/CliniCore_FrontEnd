@@ -31,8 +31,26 @@ const navItems = [
     ]
   },
   { icon: Store,        label: "POS",       href: "/pos",      submenu: true },
-  { icon: Users,        label: "Clientes",  href: "/clientes", submenu: true },
-  { icon: Dog,          label: "Mascotas",  href: "/mascotas", submenu: true },
+  { 
+  icon: Users, 
+  label: "Clientes", 
+  href: "/clientes", 
+  submenu: true,
+  subItems: [
+    { label: "Lista de Clientes", href: "/clientes/listar", icon: List },
+    { label: "Nuevo Cliente", href: "/clientes/nuevo", icon: PlusCircle },
+  ]
+},
+  { 
+  icon: Dog, 
+  label: "Mascotas", 
+  href: "/mascotas", 
+  submenu: true,
+  subItems: [
+    { label: "Lista de Mascotas", href: "/mascotas/listar", icon: List },
+    { label: "Nueva Mascota", href: "/mascotas/nuevo", icon: PlusCircle },
+  ]
+},
   { icon: ShoppingCart, label: "Ventas",    href: "/ventas",   submenu: true },
   { icon: BarChart3,    label: "Reportes",  href: "/reportes", submenu: true },
   { icon: FileText,     label: "Logs",      href: "/logs" },
