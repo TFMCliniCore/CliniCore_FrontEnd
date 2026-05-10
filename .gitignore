@@ -137,3 +137,24 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+
+# --- Ajustes para CliniCore (Prisma & NestJS) ---
+
+# NestJS build output
+dist/
+
+# Prisma
+# Ignora el motor de consulta de Prisma (binarios)
+schema.prisma.bak
+*.db
+*.db-journal
+
+# Docker
+# Ignora archivos de datos de Docker si se montan localmente
+.docker/
+docker-compose.override.yml
+
+# OS específicos
+.DS_Store
+Thumbs.db
