@@ -26,7 +26,21 @@ export async function apiFetch<T>(path: string, options?: RequestInit): Promise<
     const error = await res.json().catch(() => ({}));
     throw new Error(error.message ?? `Error ${res.status}`);
   }
-  return res.json();
+
+  if (res.status === 204) {
+    return undefined as T;
+  }
+
+  const text = await res.text();
+  if (!text) {
+    return undefined as T;
+  }
+
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return text as T;
+  }
 }
 
 export const citasApi = {
@@ -132,3 +146,94 @@ export interface Sucursal {
   nombre: string;
   direccion: string;
 }
+
+export interface MovimientoStock {
+  id: number;
+  tipo: string;
+  cantidad: number;
+  cantidadAnterior: number;
+  cantidadPosterior: number;
+  motivo?: string;
+  usuarioId?: number;
+  sucursalId?: number;
+  productoId: number;
+  createdAt: string;
+}
+
+export interface Producto {
+  id: number;
+  nombre: string;
+  descripcion?: string;
+  codigoBarras?: string;
+  codigoInterno?: string;
+  marca?: string;
+  fabricante?: string;
+  precioCompra?: string;
+  precioVenta: string;
+  cantidadActual: number;
+  cantidadMinima: number;
+  cantidadMaxima?: number;
+  fechaVencimiento?: string;
+  imagen?: string;
+  eliminado: boolean;
+  createdAt: string;
+  updatedAt: string;
+  categoriaId?: number;
+  sucursalId?: number;
+  categoria?: { id: number; nombre: string; descripcion?: string };
+  sucursal?: { id: number; nombre: string; direccion?: string };
+  movimientos?: MovimientoStock[];
+}
+
+export interface ProductoMutationPayload {
+  nombre?: string;
+  descripcion?: string | null;
+  codigoBarras?: string | null;
+  codigoInterno?: string | null;
+  marca?: string | null;
+  fabricante?: string | null;
+  precioCompra?: string | null;
+  precioVenta?: string;
+  cantidadActual?: number;
+  cantidadMinima?: number;
+  cantidadMaxima?: number | null;
+  fechaVencimiento?: string | null;
+  imagen?: string | null;
+  categoriaId?: number | null;
+  sucursalId?: number | null;
+  eliminado?: boolean;
+}
+
+export interface FiltrosProducto {
+  nombre?: string;
+  codigo?: string;
+  categoriaId?: number;
+  stockBajo?: boolean;
+}
+
+export const productosApi = {
+  listar: (filtros?: FiltrosProducto) => {
+    const params = new URLSearchParams();
+    if (filtros?.nombre)      params.set('nombre',      filtros.nombre);
+    if (filtros?.codigo)      params.set('codigo',      filtros.codigo);
+    if (filtros?.categoriaId) params.set('categoriaId', String(filtros.categoriaId));
+    if (filtros?.stockBajo)   params.set('stockBajo',   'true');
+    const qs = params.toString();
+    return apiFetch<Producto[]>(`/productos${qs ? `?${qs}` : ''}`);
+  },
+
+  buscar: (q: string) =>
+    apiFetch<Producto[]>(`/productos/buscar?q=${encodeURIComponent(q)}`),
+
+  obtener: (id: number) =>
+    apiFetch<Producto>(`/productos/${id}`),
+
+  crear: (data: ProductoMutationPayload) =>
+    apiFetch<Producto>('/productos', { method: 'POST', body: JSON.stringify(data) }),
+
+  actualizar: (id: number, data: ProductoMutationPayload) =>
+    apiFetch<Producto>(`/productos/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  eliminar: (id: number) =>
+    apiFetch<void>(`/productos/${id}`, { method: 'DELETE' }),
+};
