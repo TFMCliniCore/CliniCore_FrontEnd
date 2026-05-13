@@ -12,14 +12,14 @@ import {
 
 const navItems = [
   { icon: LayoutDashboard, label: "Dashboard", href: "/" },
-  { icon: Package, label: "Inventario", href: "/inventario" },
+  /* { icon: Package, label: "Inventario", href: "/inventario" }, */
   {
     icon: Bone, label: "Productos", href: "/productos", submenu: true,
     subItems: [
-      { label: "Lista de Productos", href: "/productos/listar",  icon: List      },
+      { label: "Ver Todos", href: "/productos/listar",  icon: List      },
       { label: "Crear Producto",     href: "/productos/nuevo",   icon: PlusCircle },
-      { label: "Generar Reporte",    href: "/productos/reporte", icon: FileDown   },
       { label: "Editar Producto",    href: "/productos/editar",  icon: Edit3      },
+      { label: "Generar Reporte",    href: "/productos/reporte", icon: FileDown   },
     ]
   },
   {
@@ -31,8 +31,26 @@ const navItems = [
     ]
   },
   { icon: Store,        label: "POS",       href: "/pos",      submenu: true },
-  { icon: Users,        label: "Clientes",  href: "/clientes", submenu: true },
-  { icon: Dog,          label: "Mascotas",  href: "/mascotas", submenu: true },
+  { 
+  icon: Users, 
+  label: "Clientes", 
+  href: "/clientes", 
+  submenu: true,
+  subItems: [
+    { label: "Lista de Clientes", href: "/clientes/listar", icon: List },
+    { label: "Nuevo Cliente", href: "/clientes/nuevo", icon: PlusCircle },
+  ]
+},
+  { 
+  icon: Dog, 
+  label: "Mascotas", 
+  href: "/mascotas", 
+  submenu: true,
+  subItems: [
+    { label: "Lista de Mascotas", href: "/mascotas/listar", icon: List },
+    { label: "Nueva Mascota", href: "/mascotas/nuevo", icon: PlusCircle },
+  ]
+},
   { icon: ShoppingCart, label: "Ventas",    href: "/ventas",   submenu: true },
   { icon: BarChart3,    label: "Reportes",  href: "/reportes", submenu: true },
   { icon: FileText,     label: "Logs",      href: "/logs" },

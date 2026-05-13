@@ -42,28 +42,64 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3002/api/v1'}/auth/login`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password }),
-        },
-      );
+    const res = await fetch('http://localhost:3002/api/v1/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
 
-      if (!res.ok) throw new Error('Credenciales incorrectas');
+    const data = await res.json();
+    console.log("CONTENIDO REAL DEL BACKEND:", data); 
 
-      const data = await res.json();
+    // ✅ CORRECCIÓN: Cambiar data.token por data.access_token
+    if (res.ok && data.access_token) {
+      // Guardamos el access_token en el localStorage con la llave 'token'
       localStorage.setItem('token', data.access_token);
-
+      localStorage.setItem('user', JSON.stringify(data.user));
+      
       setSuccess(true);
-      setTimeout(() => router.push('/'), 800);
-    } catch (err: any) {
-      setError(err.message ?? 'Ocurrió un error. Intenta de nuevo.');
-    } finally {
-      setLoading(false);
+      // Redirigir al dashboard
+      setTimeout(() => router.push('/'), 1000);
+    } else {
+      // Si el backend no envió access_token, mostramos el error
+      throw new Error(data.message || 'El backend no envió un token.');
     }
-  };
+  } catch (err: any) {
+    setError(err.message);
+  } finally {
+    setLoading(false);
+  }
+};
+
+  const handleForgotPassword = async () => {
+  if (!emailValid) {
+    setError('Por favor, ingresa un correo válido primero.');
+    return;
+  }
+  
+  setLoading(true);
+  setError('');
+
+  try {
+    const res = await fetch(
+      `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3002/api/v1'}/auth/forgot-password`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }), // Envía el correo que ya está en el input[cite: 16]
+      },
+    );
+
+    if (!res.ok) throw new Error('No se pudo enviar el correo de recuperación.');
+    
+    // Mostramos el éxito usando el mismo campo de error para no alterar la vista
+    setError('Si el correo existe, se ha enviado un enlace de recuperación.');
+  } catch (err: any) {
+    setError(err.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="min-h-screen flex">
@@ -244,8 +280,11 @@ export default function LoginPage() {
                     Recordar sesión
                   </span>
                 </label>
-                <button type="button"
-                  className="text-sm text-teal-600 hover:text-teal-700 font-semibold transition-colors">
+                <button 
+                  type="button"
+                  onClick={handleForgotPassword} // 🔥 Conexión de la lógica
+                  className="text-sm text-teal-600 hover:text-teal-700 font-semibold transition-colors"
+                >
                   ¿Olvidaste tu contraseña?
                 </button>
               </div>
