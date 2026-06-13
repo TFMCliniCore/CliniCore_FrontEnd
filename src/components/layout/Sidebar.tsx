@@ -16,10 +16,10 @@ const navItems = [
   {
     icon: Bone, label: "Productos", href: "/productos", submenu: true,
     subItems: [
-      { label: "Lista de Productos", href: "/productos/listar",  icon: List      },
-      { label: "Crear Producto",     href: "/productos/nuevo",   icon: PlusCircle },
+      { label: "Lista de Productos", href: "/productos/listar",   icon: List       },
+      { label: "Crear Producto",     href: "/productos/nuevo",    icon: PlusCircle },
       { label: "Generar Reporte",    href: "/productos/reporte", icon: FileDown   },
-      { label: "Editar Producto",    href: "/productos/editar",  icon: Edit3      },
+      { label: "Editar Producto",    href: "/productos/editar",   icon: Edit3      },
     ]
   },
   {
@@ -30,10 +30,49 @@ const navItems = [
       { label: "Sala Espera",  href: "/agenda/sala-espera", icon: Clock     },
     ]
   },
+<<<<<<< Updated upstream
   { icon: Store,        label: "POS",       href: "/pos",      submenu: true },
   { icon: Users,        label: "Clientes",  href: "/clientes", submenu: true },
   { icon: Dog,          label: "Mascotas",  href: "/mascotas", submenu: true },
   { icon: ShoppingCart, label: "Ventas",    href: "/ventas",   submenu: true },
+=======
+  
+  // 🛒 SECCIÓN PUNTO DE VENTA ENRIQUECIDA CON TUS NUEVAS RUTAS
+  { 
+    icon: Store, 
+    label: "Punto de Venta", 
+    href: "/pos", 
+    submenu: true,
+    subItems: [
+      { label: "Terminal POS",     href: "/pos",          icon: Store },
+      { label: "Historial Ventas",  href: "/ventas",       icon: FileText },
+      { label: "Simulador Precios", href: "/precios",      icon: BarChart3 },
+      { label: "Control de Caja",   href: "/cierres-caja", icon: List }, // Puedes cambiarlo por un icono de billete/caja si prefieres
+    ]
+  },
+
+  { 
+    icon: Users, 
+    label: "Clientes", 
+    href: "/clientes", 
+    submenu: true,
+    subItems: [
+      { label: "Lista de Clientes", href: "/clientes/listar", icon: List },
+      { label: "Nuevo Cliente", href: "/clientes/nuevo", icon: PlusCircle },
+    ]
+  },
+  { 
+    icon: Dog, 
+    label: "Mascotas", 
+    href: "/mascotas", 
+    submenu: true,
+    subItems: [
+      { label: "Lista de Mascotas", href: "/mascotas/listar", icon: List },
+      { label: "Nueva Mascota", href: "/mascotas/nuevo", icon: PlusCircle },
+    ]
+  },
+  
+>>>>>>> Stashed changes
   { icon: BarChart3,    label: "Reportes",  href: "/reportes", submenu: true },
   { icon: FileText,     label: "Logs",      href: "/logs" },
 ];

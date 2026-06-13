@@ -55,8 +55,69 @@ export default function CrearProductoForm() {
     setValue("precioMasImpuestos", parseFloat(total.toFixed(2)));
   }, [precioCosto, impuesto, setValue]);
 
-  const onSubmit = (data: ProductoFormData) => {
-    console.log("Datos del Producto:", data);
+const onSubmit = async (data: ProductoFormData) => {
+    console.log("Enviando al backend corregido:", data);
+
+    try {
+      const response = await fetch("http://localhost:3002/api/v1/productos", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          nombre: data.nombre,
+          categoriaId: data.categoria === "medicamentos" ? 1 : 2,
+          marca: data.marca || "Genérico",
+          precioVenta: String(data.precioVenta || 0), 
+          // 🏢 Forzamos la asociación a la sucursal activa para que Ventas lo reconozca
+          sucursalId: 1 
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("❌ Error devuelto por el Microservicio:", errorData);
+        alert(`No se pudo crear el producto: ${errorData.message?.join(", ") || "Error desconocido"}`);
+        return;
+      }
+
+      // 🧠 Leemos el JSON una sola vez
+      const productoCreado = await response.json();
+      console.log("✅ ¡Producto creado con éxito en Inventario!", productoCreado);
+
+      // 🚀 Disparo inmediato para el stock inicial (Try-Catch Interno)
+      try {
+        const stockResponse = await fetch("http://localhost:3002/api/v1/movimientos-stock", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            productoId: productoCreado.id, 
+            cantidad: 100,                  
+            tipo: "ENTRADA", 
+            motivo: "Stock inicial de prueba"
+          }),
+        });
+
+        if (stockResponse.ok) {
+          console.log("📦 Stock inicial cargado exitosamente.");
+          alert("¡Producto registrado y stock cargado con éxito!");
+        } else {
+          const stockErrorData = await stockResponse.json();
+          console.warn("⚠️ El producto se creó pero el backend rebotó el stock:", stockErrorData);
+          alert("Producto creado, pero verifica el formato del movimiento de stock.");
+        }
+      } catch (stockError) {
+        console.error("Error de red al intentar cargar stock:", stockError);
+        alert("Producto creado, pero hubo un fallo de red al meter el stock.");
+      }
+
+    // 🔑 AQUÍ ESTABA EL DETALLE: Cerramos el Try principal y atrapamos su Catch
+    } catch (error) {
+      console.error("❌ Error de red al conectar con el Gateway:", error);
+      alert("Error de conexión con el API Gateway.");
+    }
   };
 
   return (
