@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import {
   productosApi,
+  resolveImageUrl,
   type Producto,
   type ProductoMutationPayload,
 } from "@/lib/api";
@@ -20,7 +21,7 @@ function resolverEstado(p: Producto): "Disponible" | "Stock Bajo" | "Agotado" {
   return "Disponible";
 }
 
-const POR_PAGINA = 5;
+const POR_PAGINA = 15;
 
 export default function ListaProductos() {
   const [productos, setProductos]                   = useState<Producto[]>([]);
@@ -299,8 +300,25 @@ export default function ListaProductos() {
                       {/* Producto */}
                       <td className="px-6 py-5">
                         <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-50 to-emerald-50 flex items-center justify-center text-cyan-600 border border-cyan-100/50">
-                            <Package size={20} />
+                          <div className="w-10 h-10 rounded-xl overflow-hidden border border-slate-100 bg-gradient-to-br from-cyan-50 to-emerald-50 flex-shrink-0">
+                            {resolveImageUrl(prod.imagen, prod.updatedAt) ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={resolveImageUrl(prod.imagen, prod.updatedAt)!}
+                                alt={prod.nombre}
+                                className="w-full h-full object-cover"
+                                onError={(e) => {
+                                  (e.currentTarget as HTMLImageElement).style.display = "none";
+                                  (e.currentTarget.nextSibling as HTMLElement | null)?.style.setProperty("display", "flex");
+                                }}
+                              />
+                            ) : null}
+                            <div
+                              className="w-full h-full items-center justify-center text-cyan-600"
+                              style={{ display: resolveImageUrl(prod.imagen, prod.updatedAt) ? "none" : "flex" }}
+                            >
+                              <Package size={20} />
+                            </div>
                           </div>
                           <div>
                             <p className="font-bold text-slate-700 text-sm">{prod.nombre}</p>

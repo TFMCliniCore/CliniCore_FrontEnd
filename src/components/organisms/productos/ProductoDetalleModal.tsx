@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from "react";
-import Image from "next/image";
 import {
   AlertCircle,
   Calendar,
@@ -14,6 +13,7 @@ import {
   Save,
   Tag,
   Trash2,
+  Upload,
   X,
 } from "lucide-react";
 import type {
@@ -21,6 +21,7 @@ import type {
   Producto,
   ProductoMutationPayload,
 } from "@/lib/api";
+import { productosApi } from "@/lib/api";
 
 export type ProductoModalMode = "detalle" | "editar" | "eliminar";
 
@@ -396,20 +397,86 @@ export default function ProductoDetalleModal({
   const [imageError, setImageError] = useState(false);
   const [formulario, setFormulario] = useState<ProductoFormState>(crearFormularioProducto(producto));
   const [errorFormulario, setErrorFormulario] = useState<string | null>(null);
+  const [archivoImagen, setArchivoImagen] = useState<File | null>(null);
+  const [previewLocal, setPreviewLocal] = useState<string | null>(null);
+  const [subiendoImagen, setSubiendoImagen] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
 
-  const imagenActual = modo === "editar" ? formulario.imagen : producto?.imagen;
-  const imageSrc = useMemo(() => resolverImagen(imagenActual), [imagenActual]);
+  // En edición: preview local > URL del formulario > imagen guardada en BD
+  const imagenActual = previewLocal ?? (modo === "editar" ? formulario.imagen : producto?.imagen);
+  const imageSrc = useMemo(() => {
+    // Preview local (blob URL) — usar tal cual, no necesita cache-buster
+    if (previewLocal) return previewLocal;
+
+    const base = resolverImagen(imagenActual);
+    if (!base) return null;
+
+    // Para URLs externas (https://unsplash…) no añadir query
+    if (/^https?:\/\//i.test(imagenActual ?? "")) return base;
+
+    // Para rutas del microservicio: añadir updatedAt como cache-buster
+    // Evita que el browser sirva respuestas en caché corruptas del gateway anterior
+    const ts = producto?.updatedAt
+      ? new Date(producto.updatedAt).getTime()
+      : Date.now();
+    return `${base}?v=${ts}`;
+  }, [previewLocal, imagenActual, producto?.updatedAt]);
   const estado = producto ? resolverEstado(producto) : null;
   const bloqueadoEdicion = cargando || guardando;
 
+  // Resetear error de imagen cada vez que cambie la URL o el producto
   useEffect(() => {
     setImageError(false);
-  }, [producto?.id, imagenActual]);
+  }, [imageSrc]);
 
+  // Resetear estado local al cambiar modo o producto
   useEffect(() => {
     setFormulario(crearFormularioProducto(producto));
     setErrorFormulario(null);
+    setArchivoImagen(null);
+    setPreviewLocal(null);
+    setIsDragOver(false);
+    setImageError(false);
   }, [modo, producto]);
+
+  const aplicarArchivo = (file: File) => {
+    const TIPOS_VALIDOS = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    if (!TIPOS_VALIDOS.includes(file.type)) return;
+    setArchivoImagen(file);
+    setPreviewLocal(URL.createObjectURL(file));
+    setFormulario((prev) => ({ ...prev, imagen: "" }));
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) aplicarArchivo(file);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) aplicarArchivo(file);
+  };
+
+  const quitarArchivo = () => {
+    setArchivoImagen(null);
+    setPreviewLocal(null);
+    const input = document.getElementById("file-upload-modal-edit") as HTMLInputElement | null;
+    if (input) input.value = "";
+  };
 
   if (!abierto || !producto) return null;
 
@@ -455,18 +522,38 @@ export default function ProductoDetalleModal({
 
   const manejarGuardar = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!onGuardar) return;
+    if (!onGuardar || !producto) return;
 
     try {
       setErrorFormulario(null);
+
+      // Capturar la ruta de imagen en una variable local (sin mutar estado)
+      let imagenPath: string | null | undefined = undefined;
+
+      if (archivoImagen) {
+        setSubiendoImagen(true);
+        try {
+          const subido = await productosApi.subirImagen(producto.id, archivoImagen);
+          imagenPath = subido.imagen ?? null;
+        } finally {
+          setSubiendoImagen(false);
+        }
+      }
+
       const payload = construirPayloadProducto(formulario);
+
+      // Sobreescribir la imagen con la ruta recién subida si aplica
+      if (imagenPath !== undefined) {
+        payload.imagen = imagenPath;
+      }
+
       await onGuardar(payload);
     } catch (err) {
+      setSubiendoImagen(false);
       if (err instanceof Error) {
         setErrorFormulario(err.message);
         return;
       }
-
       setErrorFormulario("No se pudo validar el formulario.");
     }
   };
@@ -505,34 +592,120 @@ export default function ProductoDetalleModal({
         <div className="space-y-4">
           <div className="rounded-[1.75rem] border border-slate-100 bg-[linear-gradient(180deg,_rgba(248,250,252,0.98),_rgba(255,255,255,1))] p-5 shadow-sm">
             <div className="mx-auto w-full max-w-[240px] sm:max-w-[280px] xl:max-w-[300px]">
-              <div className="overflow-hidden rounded-[1.6rem] border border-slate-100 bg-slate-50 shadow-inner">
-                <div className="relative aspect-[4/4.6] w-full">
-                  {imageSrc && !imageError ? (
-                    <Image
-                      src={imageSrc}
-                      alt={`Imagen de ${modo === "editar" ? formulario.nombre || producto.nombre : producto.nombre}`}
-                      fill
-                      loader={({ src }) => src}
-                      unoptimized
-                      className="object-contain p-4"
-                      sizes="(max-width: 1280px) 100vw, 420px"
-                      onError={() => setImageError(true)}
-                    />
-                  ) : (
-                    <div className="flex h-full w-full flex-col items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(34,211,238,0.12),_transparent_34%),linear-gradient(180deg,_rgba(248,250,252,1),_rgba(226,232,240,0.85))] px-6 text-center">
-                      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90 shadow-sm">
-                        <ImageOff size={24} className="text-slate-400" />
+
+              {/* ── Zona de imagen: drag&drop en edición, estática en los demás modos ── */}
+              {modo === "editar" ? (
+                <>
+                  {/* Input oculto — accesible vía label */}
+                  <input
+                    id="file-upload-modal-edit"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="sr-only"
+                    onChange={handleFileChange}
+                  />
+                  <label
+                    htmlFor="file-upload-modal-edit"
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    className={`group block cursor-pointer overflow-hidden rounded-[1.6rem] border-2 border-dashed shadow-inner transition-all ${
+                      isDragOver
+                        ? "border-cyan-400 bg-cyan-50/60"
+                        : "border-slate-200 bg-slate-50 hover:border-cyan-300"
+                    }`}
+                  >
+                    <div className="relative aspect-[4/4.6] w-full overflow-hidden">
+                      {imageSrc && !imageError ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          key={imageSrc}
+                          src={imageSrc}
+                          alt={`Imagen de ${formulario.nombre || producto.nombre}`}
+                          className="absolute inset-0 h-full w-full object-contain p-4"
+                          onLoad={() => setImageError(false)}
+                        onError={() => setImageError(true)}
+                        />
+                      ) : (
+                        <div className="absolute inset-0 flex h-full w-full flex-col items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(34,211,238,0.12),_transparent_34%),linear-gradient(180deg,_rgba(248,250,252,1),_rgba(226,232,240,0.85))] px-6 text-center">
+                          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90 shadow-sm">
+                            <Upload size={22} className="text-slate-400" />
+                          </div>
+                          <p className="mt-3 text-xs font-black uppercase tracking-[0.18em] text-slate-500">
+                            Sin imagen
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Overlay hover/drag */}
+                      <div className={`absolute inset-0 flex flex-col items-center justify-center gap-1 rounded-[1.4rem] transition-all ${
+                        isDragOver
+                          ? "bg-cyan-500/50 opacity-100"
+                          : "bg-slate-900/50 opacity-0 group-hover:opacity-100"
+                      }`}>
+                        <Upload size={26} className="text-white drop-shadow" />
+                        <p className="text-xs font-black text-white drop-shadow">
+                          {isDragOver ? "Suelta aquí" : "Cambiar imagen"}
+                        </p>
+                        <p className="text-[11px] text-white/80">clic o arrastra</p>
                       </div>
-                      <p className="mt-4 text-sm font-black uppercase tracking-[0.18em] text-slate-500">
-                        Imagen no disponible
-                      </p>
-                      <p className="mt-2 text-sm text-slate-400">
-                        Este producto aun no tiene una foto asociada en MS_Inventario.
-                      </p>
                     </div>
-                  )}
+                  </label>
+
+                  {/* Info del archivo / ruta actual */}
+                  <div className="mt-2 min-h-[32px] text-center">
+                    {archivoImagen ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <span className="max-w-[160px] truncate text-[11px] font-semibold text-slate-600" title={archivoImagen.name}>
+                          {archivoImagen.name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={quitarArchivo}
+                          className="text-[11px] font-bold text-red-500 hover:text-red-700"
+                        >
+                          Quitar
+                        </button>
+                      </div>
+                    ) : formulario.imagen ? (
+                      <p className="truncate px-1 text-[11px] text-slate-400" title={formulario.imagen}>
+                        {formulario.imagen}
+                      </p>
+                    ) : (
+                      <p className="text-[11px] text-slate-400">JPEG · PNG · WebP · GIF · Máx 5 MB</p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                /* Modos detalle / eliminar — imagen estática */
+                <div className="overflow-hidden rounded-[1.6rem] border border-slate-100 bg-slate-50 shadow-inner">
+                  <div className="relative aspect-[4/4.6] w-full overflow-hidden">
+                    {imageSrc && !imageError ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={imageSrc}
+                        src={imageSrc}
+                        alt={`Imagen de ${producto.nombre}`}
+                        className="absolute inset-0 h-full w-full object-contain p-4"
+                        onLoad={() => setImageError(false)}
+                        onError={() => setImageError(true)}
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex h-full w-full flex-col items-center justify-center bg-[radial-gradient(circle_at_top,_rgba(34,211,238,0.12),_transparent_34%),linear-gradient(180deg,_rgba(248,250,252,1),_rgba(226,232,240,0.85))] px-6 text-center">
+                        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90 shadow-sm">
+                          <ImageOff size={24} className="text-slate-400" />
+                        </div>
+                        <p className="mt-4 text-sm font-black uppercase tracking-[0.18em] text-slate-500">
+                          Imagen no disponible
+                        </p>
+                        <p className="mt-2 text-sm text-slate-400">
+                          Este producto aun no tiene una foto asociada en MS_Inventario.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             <div className="mt-5 space-y-3">
@@ -640,10 +813,13 @@ export default function ProductoDetalleModal({
                     min="1"
                   />
                   <CampoInput
-                    etiqueta="Imagen"
+                    etiqueta="Imagen (URL externa)"
                     valor={formulario.imagen}
-                    onChange={(valor) => actualizarCampo("imagen", valor)}
-                    placeholder="https://... o /uploads/imagen.jpg"
+                    onChange={(valor) => {
+                      actualizarCampo("imagen", valor);
+                      if (valor) { setArchivoImagen(null); setPreviewLocal(null); }
+                    }}
+                    placeholder="https://... (o usa el área de imagen para subir archivo)"
                     expandido
                   />
                 </fieldset>
@@ -912,11 +1088,11 @@ export default function ProductoDetalleModal({
         <button
           type="submit"
           form="producto-edicion-form"
-          disabled={guardando}
+          disabled={guardando || subiendoImagen}
           className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-600 px-5 py-3 text-sm font-bold text-white transition-all hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {guardando ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-          {guardando ? "Guardando..." : "Guardar cambios"}
+          {(guardando || subiendoImagen) ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+          {subiendoImagen ? "Subiendo imagen..." : guardando ? "Guardando..." : "Guardar cambios"}
         </button>
       )}
 

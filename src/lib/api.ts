@@ -1,4 +1,29 @@
 const GATEWAY_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3002/api/v1';
+const GATEWAY_ORIGIN = GATEWAY_URL.replace(/\/api\/v1\/?$/, '');
+
+/**
+ * Convierte una ruta de imagen (relativa o absoluta) a una URL completa
+ * accesible desde el navegador. Soporta rutas del microservicio y URLs externas.
+ *
+ * @param updatedAt  Si se provee, añade `?v=<timestamp>` para evitar caché
+ *                   obsoleta del browser (especialmente tras cambios de gateway).
+ */
+export function resolveImageUrl(
+  imagen?: string | null,
+  updatedAt?: string | null,
+): string | null {
+  if (!imagen) return null;
+
+  // URL absoluta o data URI — usar tal cual (sin cache-buster)
+  if (/^(https?:)?\/\//i.test(imagen) || imagen.startsWith('data:')) return imagen;
+
+  // Ruta relativa → construir URL completa con el origen del gateway
+  const base = imagen.startsWith('/') ? `${GATEWAY_ORIGIN}${imagen}` : `${GATEWAY_ORIGIN}/${imagen}`;
+
+  // Añadir cache-buster basado en updatedAt para evitar respuestas cacheadas incorrectas
+  const ts = updatedAt ? new Date(updatedAt).getTime() : null;
+  return ts ? `${base}?v=${ts}` : base;
+}
 
 export async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
@@ -236,4 +261,27 @@ export const productosApi = {
 
   eliminar: (id: number) =>
     apiFetch<void>(`/productos/${id}`, { method: 'DELETE' }),
+
+  /** Sube una imagen al microservicio y actualiza el campo imagen del producto. */
+  subirImagen: async (id: number, file: File): Promise<Producto> => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+    const formData = new FormData();
+    formData.append('imagen', file);
+
+    // NO incluir Content-Type: el navegador lo pone con el boundary correcto
+    const headers: Record<string, string> = {};
+    if (token && token.length > 20) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`${GATEWAY_URL}/productos/${id}/imagen`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({}));
+      throw new Error((error as any).message ?? `Error ${res.status}`);
+    }
+    return res.json() as Promise<Producto>;
+  },
 };
