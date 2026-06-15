@@ -55,7 +55,7 @@ export default function LoginPage() {
     if (res.ok && data.access_token) {
       // Guardamos el access_token en el localStorage con la llave 'token'
       localStorage.setItem('token', data.access_token);
-      localStorage.setItem('user', JSON.stringify(data.user));
+      localStorage.setItem('user', JSON.stringify(data.usuario));
       
       setSuccess(true);
       // Redirigir al dashboard
