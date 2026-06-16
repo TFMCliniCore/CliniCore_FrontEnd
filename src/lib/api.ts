@@ -128,27 +128,23 @@ export type EstadoCita = 'PENDIENTE' | 'CONFIRMADA' | 'EN_CURSO' | 'COMPLETADA' 
 
 export interface Cita {
   id: number;
-  fechaHora: string;
+  fecha: string;
   motivo: string;
-  notas?: string;
+  tipo: string;
   estado: EstadoCita;
   pacienteId: number;
-  usuarioId: number;
-  sucursalId: number;
+  usuarioId?: number;
   paciente?: { id: number; nombre: string; especie: string; cliente: { nombres: string } };
-  usuario?: { id: number; nombres: string; cargo: string };
-  sucursal?: { id: number; nombre: string };
+  usuario?: { id: number; nombres: string; cargo: string; sucursal?: { nombre: string } };
   createdAt: string;
 }
 
 export interface CrearCitaDto {
   pacienteId: number;
-  usuarioId: number;
-  sucursalId: number;
-  fechaHora: string;
+  usuarioId?: number;
+  fecha: string;
   motivo: string;
-  notas?: string;
-  estado?: EstadoCita;
+  tipo: string;
 }
 
 export interface Paciente {
@@ -164,6 +160,8 @@ export interface Usuario {
   nombres: string;
   email: string;
   cargo: string;
+  sucursalId?: number;
+  sucursal?: { id: number; nombre: string; direccion: string };
 }
 
 export interface Sucursal {
