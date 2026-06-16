@@ -238,6 +238,7 @@ const navItems = [
     icon: Shield,
     label: "Usuarios y Roles",
     href: "/usuarios",
+    roles: [1],
     submenu: true,
     subItems: [
       {
@@ -245,10 +246,10 @@ const navItems = [
         href: "/usuarios",
         icon: Shield,
       },
-      { label: "Lista de Productos", href: "/productos/listar",   icon: List       },
-      { label: "Crear Producto",     href: "/productos/nuevo",    icon: PlusCircle },
-      { label: "Generar Reporte",    href: "/productos/reporte", icon: FileDown   },
-      { label: "Editar Producto",    href: "/productos/editar",   icon: Edit3      },
+      { label: "Lista de Productos", href: "/productos/listar", icon: List },
+      { label: "Crear Producto", href: "/productos/nuevo", icon: PlusCircle },
+      { label: "Generar Reporte", href: "/productos/reporte", icon: FileDown },
+      { label: "Editar Producto", href: "/productos/editar", icon: Edit3 },
     ],
   },
 
@@ -263,46 +264,24 @@ const navItems = [
         href: "/integraciones",
         icon: PlugZap,
       },
-      { label: "Ver Agenda",   href: "/agenda",              icon: Calendar  },
-      { label: "Nueva Cita",   href: "/agenda/nueva-cita",  icon: PlusCircle },
-      { label: "Sala Espera",  href: "/agenda/sala-espera", icon: Clock     },
+      { label: "Ver Agenda", href: "/agenda", icon: Calendar },
+      { label: "Nueva Cita", href: "/agenda/nueva-cita", icon: PlusCircle },
+      { label: "Sala Espera", href: "/agenda/sala-espera", icon: Clock },
     ],
   },
-  
+
   // 🛒 SECCIÓN PUNTO DE VENTA ENRIQUECIDA CON TUS NUEVAS RUTAS
-  { 
-    icon: Store, 
-    label: "Punto de Venta", 
-    href: "/pos", 
+  {
+    icon: Store,
+    label: "Punto de Venta",
+    href: "/pos",
     submenu: true,
     subItems: [
-      { label: "Terminal POS",     href: "/pos",          icon: Store },
-      { label: "Historial Ventas",  href: "/ventas",       icon: FileText },
-      { label: "Simulador Precios", href: "/precios",      icon: BarChart3 },
-      { label: "Control de Caja",   href: "/cierres-caja", icon: List },
-    ]
-  },
-
-  { 
-    icon: Users, 
-    label: "Clientes", 
-    href: "/clientes", 
-    submenu: true,
-    subItems: [
-      { label: "Lista de Clientes", href: "/clientes/listar", icon: List },
-      { label: "Nuevo Cliente", href: "/clientes/nuevo", icon: PlusCircle },
-    ]
-  },
-
-  { 
-    icon: Dog, 
-    label: "Mascotas", 
-    href: "/mascotas", 
-    submenu: true,
-    subItems: [
-      { label: "Lista de Mascotas", href: "/mascotas/listar", icon: List },
-      { label: "Nueva Mascota", href: "/mascotas/nuevo", icon: PlusCircle },
-    ]
+      { label: "Terminal POS", href: "/pos", icon: Store },
+      { label: "Historial Ventas", href: "/ventas", icon: FileText },
+      { label: "Simulador Precios", href: "/precios", icon: BarChart3 },
+      { label: "Control de Caja", href: "/cierres-caja", icon: List },
+    ],
   },
 
   {
@@ -330,16 +309,20 @@ export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
   const pathname = usePathname();
+  const [rolId, setRolId] = useState<number>(0);
 
   useEffect(() => {
-    setIsOpen(false);
-  }, [pathname]);
+    const raw = localStorage.getItem("user");
+    if (raw) {
+      try {
+        setRolId(JSON.parse(raw).rolId ?? 0);
+      } catch {}
+    }
+  }, []);
 
   useEffect(() => {
     const active = navItems.find((item) =>
-      item.subItems?.some((sub) =>
-        pathname.startsWith(sub.href)
-      )
+      item.subItems?.some((sub) => pathname.startsWith(sub.href)),
     );
 
     if (active) {
@@ -348,9 +331,7 @@ export default function Sidebar() {
   }, [pathname]);
 
   const toggleSubmenu = (label: string) => {
-    setExpandedItem((prev) =>
-      prev === label ? null : label
-    );
+    setExpandedItem((prev) => (prev === label ? null : label));
   };
 
   const Bubbles = () => (
@@ -423,109 +404,122 @@ export default function Sidebar() {
 
         {/* NAV */}
         <nav className="flex-1 px-4 mt-2 space-y-1 relative z-10 overflow-y-auto no-scrollbar">
-          {navItems.map((item, index) => {
-            const isItemActive =
-              pathname === item.href ||
-              item.subItems?.some((sub) =>
-                pathname.startsWith(sub.href)
-              );
+          {navItems
+            .filter((item) => !item.roles || item.roles.includes(rolId))
+            .map((item, index) => {
+              const isItemActive =
+                pathname === item.href ||
+                item.subItems?.some((sub) => pathname.startsWith(sub.href));
 
-            const isExpanded = expandedItem === item.label;
+              const isExpanded = expandedItem === item.label;
 
-            return (
-              <div key={index} className="space-y-1">
-                <div onClick={() => (item.submenu ? toggleSubmenu(item.label) : null)}>
-                  <Link
-                    href={item.submenu ? "#" : item.href}
-                    onClick={(e) => {
-                      if (item.submenu) {
-                        e.preventDefault();
-                      }
-                    }}
-                    className={`
-                      group
-                      flex items-center justify-between
-                      px-5 py-3.5
-                      rounded-2xl
-                      transition-all duration-300
-                      relative overflow-hidden
-
-                      ${
-                        isItemActive
-                          ? "bg-white/20 backdrop-blur-md border border-white/15"
-                          : "hover:bg-white/10 text-slate-300 hover:text-white"
-                      }
-                    `}
-                  >
-                    <div className="flex items-center space-x-4 relative z-10">
-                      <item.icon
-                        size={21}
-                        className={isItemActive ? "text-cyan-300" : "opacity-50"}
-                      />
-
-                      <span className={`text-[15px] ${isItemActive ? "font-bold" : "font-medium"}`}>
-                        {item.label}
-                      </span>
-                    </div>
-
-                    {item.submenu && (
-                      <ChevronRight
-                        size={15}
-                        className={`transition-transform duration-300 ${
-                          isExpanded ? "rotate-90" : "opacity-40"
-                        }`}
-                      />
-                    )}
-                  </Link>
-                </div>
-
-                {/* SUBMENU */}
-                {item.submenu && item.subItems && (
+              return (
+                <div key={index} className="space-y-1">
                   <div
-                    className={`
-                      overflow-hidden transition-all duration-300 ease-in-out pl-6
-                      ${isExpanded ? "max-h-96 opacity-100 mt-1 mb-2" : "max-h-0 opacity-0"}
-                    `}
+                    onClick={() =>
+                      item.submenu ? toggleSubmenu(item.label) : null
+                    }
                   >
-                    <div className="border-l-2 border-white/10 space-y-1 ml-4">
-                      {item.subItems.map((sub, si) => {
-                        const isSubActive =
-                          pathname === sub.href || pathname.startsWith(sub.href + "/");
+                    <Link
+                      href={item.submenu ? "#" : item.href}
+                      onClick={(e) => {
+                        if (item.submenu) {
+                          e.preventDefault();
+                        }
+                      }}
+                      className={`
+                        group
+                        flex items-center justify-between
+                        px-5 py-3.5
+                        rounded-2xl
+                        transition-all duration-300
+                        relative overflow-hidden
 
-                        return (
-                          <Link
-                            key={si}
-                            href={sub.href}
-                            className={`
-                              flex items-center space-x-3
-                              px-6 py-2.5
-                              rounded-xl text-sm
-                              transition-all
+                        ${
+                          isItemActive
+                            ? "bg-white/20 backdrop-blur-md border border-white/15"
+                            : "hover:bg-white/10 text-slate-300 hover:text-white"
+                        }
+                      `}
+                    >
+                      <div className="flex items-center space-x-4 relative z-10">
+                        <item.icon
+                          size={21}
+                          className={
+                            isItemActive ? "text-cyan-300" : "opacity-50"
+                          }
+                        />
 
-                              ${
-                                isSubActive
-                                  ? "text-cyan-300 font-bold bg-cyan-400/10"
-                                  : "text-slate-400 hover:text-white hover:bg-white/5"
-                              }
-                            `}
-                          >
-                            {sub.icon && (
-                              <sub.icon
-                                size={14}
-                                className={isSubActive ? "text-cyan-300" : "opacity-40"}
-                              />
-                            )}
+                        <span
+                          className={`text-[15px] ${
+                            isItemActive ? "font-bold" : "font-medium"
+                          }`}
+                        >
+                          {item.label}
+                        </span>
+                      </div>
 
-                            <span>{sub.label}</span>
-                          </Link>
-                        );
-                      })}
-                    </div>
+                      {item.submenu && (
+                        <ChevronRight
+                          size={15}
+                          className={`transition-transform duration-300 ${
+                            isExpanded ? "rotate-90" : "opacity-40"
+                          }`}
+                        />
+                      )}
+                    </Link>
                   </div>
-                )}
-              </div>
-            );
-          })}
+
+                  {/* SUBMENU */}
+                  {item.submenu && item.subItems && (
+                    <div
+                      className={`
+                        overflow-hidden transition-all duration-300 ease-in-out pl-6
+                        ${isExpanded ? "max-h-96 opacity-100 mt-1 mb-2" : "max-h-0 opacity-0"}
+                      `}
+                    >
+                      <div className="border-l-2 border-white/10 space-y-1 ml-4">
+                        {item.subItems.map((sub, si) => {
+                          const isSubActive =
+                            pathname === sub.href ||
+                            pathname.startsWith(sub.href + "/");
+
+                          return (
+                            <Link
+                              key={si}
+                              href={sub.href}
+                              className={`
+                                flex items-center space-x-3
+                                px-6 py-2.5
+                                rounded-xl text-sm
+                                transition-all
+
+                                ${
+                                  isSubActive
+                                    ? "text-cyan-300 font-bold bg-cyan-400/10"
+                                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                                }
+                              `}
+                            >
+                              {sub.icon && (
+                                <sub.icon
+                                  size={14}
+                                  className={
+                                    isSubActive ? "text-cyan-300" : "opacity-40"
+                                  }
+                                />
+                              )}
+
+                              <span>{sub.label}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
         </nav>
 
         {/* FOOTER */}
