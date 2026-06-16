@@ -55,7 +55,8 @@ export async function apiFetch<T>(
     if (res.status === 401) {
       console.error("No autorizado. Redirigiendo...");
       localStorage.removeItem("token");
-      window.location.href = "/login";
+      localStorage.removeItem("user");
+      document.cookie = "token=; path=/; max-age=0";
     }
     const error = await res.json().catch(() => ({}));
     throw new Error(error.message ?? `Error ${res.status}`);
@@ -116,8 +117,20 @@ export const pacientesApi = {
 export const usuariosApi = {
   listar: () => apiFetch<Usuario[]>("/usuarios"),
   obtener: (id: number) => apiFetch<any>(`/usuarios/${id}`),
-  actualizar: (id: number, data: Partial<{ nombres: string; celular: string; cargo: string; contrasena: string; rolId: number }>) =>
-  apiFetch<any>(`/usuarios/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  actualizar: (
+    id: number,
+    data: Partial<{
+      nombres: string;
+      celular: string;
+      cargo: string;
+      contrasena: string;
+      rolId: number;
+    }>,
+  ) =>
+    apiFetch<any>(`/usuarios/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
 
   subirFoto: async (id: number, file: File): Promise<any> => {
     const token =
@@ -162,7 +175,7 @@ export const clientesApi = {
 };
 
 export const rolesApi = {
-  listar: () => apiFetch<Rol[]>('/roles'),
+  listar: () => apiFetch<Rol[]>("/roles"),
 };
 
 // ── Types ────────────────────────────────────────────────────────────────────

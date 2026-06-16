@@ -238,6 +238,7 @@ const navItems = [
     icon: Shield,
     label: "Usuarios y Roles",
     href: "/usuarios",
+    roles: [1],
     submenu: true,
     subItems: [
       {
@@ -286,20 +287,24 @@ const navItems = [
 export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
 
-  const [expandedItem, setExpandedItem] =
-    useState<string | null>(null);
+  const [expandedItem, setExpandedItem] = useState<string | null>(null);
 
   const pathname = usePathname();
 
+  const [rolId, setRolId] = useState<number>(0);
+
   useEffect(() => {
-    setIsOpen(false);
-  }, [pathname]);
+    const raw = localStorage.getItem("user");
+    if (raw) {
+      try {
+        setRolId(JSON.parse(raw).rolId ?? 0);
+      } catch {}
+    }
+  }, []);
 
   useEffect(() => {
     const active = navItems.find((item) =>
-      item.subItems?.some((sub) =>
-        pathname.startsWith(sub.href)
-      )
+      item.subItems?.some((sub) => pathname.startsWith(sub.href)),
     );
 
     if (active) {
@@ -308,9 +313,7 @@ export default function Sidebar() {
   }, [pathname]);
 
   const toggleSubmenu = (label: string) => {
-    setExpandedItem((prev) =>
-      prev === label ? null : label
-    );
+    setExpandedItem((prev) => (prev === label ? null : label));
   };
 
   const Bubbles = () => (
@@ -328,11 +331,7 @@ export default function Sidebar() {
         onClick={() => setIsOpen(!isOpen)}
         className="md:hidden fixed top-4 left-4 z-[60] p-2.5 bg-[#0e314d] text-white rounded-xl shadow-2xl border border-white/20 backdrop-blur-lg"
       >
-        {isOpen ? (
-          <X size={22} />
-        ) : (
-          <Menu size={22} />
-        )}
+        {isOpen ? <X size={22} /> : <Menu size={22} />}
       </button>
 
       {/* OVERLAY */}
@@ -347,11 +346,7 @@ export default function Sidebar() {
         className={`
         fixed inset-y-0 left-0 z-50 w-72 transform transition-all duration-500
         md:translate-x-0
-        ${
-          isOpen
-            ? "translate-x-0"
-            : "-translate-x-full"
-        }
+        ${isOpen ? "translate-x-0" : "-translate-x-full"}
 
         flex flex-col h-screen text-white overflow-hidden
 
@@ -369,7 +364,6 @@ export default function Sidebar() {
 
         {/* LOGO */}
         <div className="pt-10 pb-8 flex flex-col items-center relative z-10 px-4">
-
           <div className="relative h-28 w-28 bg-white/10 rounded-3xl backdrop-blur-xl flex items-center justify-center shadow-[0_0_30px_rgba(255,255,255,0.15)]">
             <Image
               src="/images/logo-clinicore.png"
@@ -393,41 +387,30 @@ export default function Sidebar() {
 
         {/* NAV */}
         <nav className="flex-1 px-4 mt-2 space-y-1 relative z-10 overflow-y-auto no-scrollbar">
+          {navItems
+            .filter((item) => !item.roles || item.roles.includes(rolId))
+            .map((item, index) => {
+              const isItemActive =
+                pathname === item.href ||
+                item.subItems?.some((sub) => pathname.startsWith(sub.href));
 
-          {navItems.map((item, index) => {
-            const isItemActive =
-              pathname === item.href ||
-              item.subItems?.some((sub) =>
-                pathname.startsWith(sub.href)
-              );
+              const isExpanded = expandedItem === item.label;
 
-            const isExpanded =
-              expandedItem === item.label;
-
-            return (
-              <div
-                key={index}
-                className="space-y-1"
-              >
-                <div
-                  onClick={() =>
-                    item.submenu
-                      ? toggleSubmenu(item.label)
-                      : null
-                  }
-                >
-                  <Link
-                    href={
-                      item.submenu
-                        ? "#"
-                        : item.href
+              return (
+                <div key={index} className="space-y-1">
+                  <div
+                    onClick={() =>
+                      item.submenu ? toggleSubmenu(item.label) : null
                     }
-                    onClick={(e) => {
-                      if (item.submenu) {
-                        e.preventDefault();
-                      }
-                    }}
-                    className={`
+                  >
+                    <Link
+                      href={item.submenu ? "#" : item.href}
+                      onClick={(e) => {
+                        if (item.submenu) {
+                          e.preventDefault();
+                        }
+                      }}
+                      className={`
                       group
                       flex items-center justify-between
                       px-5 py-3.5
@@ -441,45 +424,37 @@ export default function Sidebar() {
                           : "hover:bg-white/10 text-slate-300 hover:text-white"
                       }
                     `}
-                  >
-                    <div className="flex items-center space-x-4 relative z-10">
+                    >
+                      <div className="flex items-center space-x-4 relative z-10">
+                        <item.icon
+                          size={21}
+                          className={
+                            isItemActive ? "text-cyan-300" : "opacity-50"
+                          }
+                        />
 
-                      <item.icon
-                        size={21}
-                        className={
-                          isItemActive
-                            ? "text-cyan-300"
-                            : "opacity-50"
-                        }
-                      />
+                        <span
+                          className={`text-[15px] ${
+                            isItemActive ? "font-bold" : "font-medium"
+                          }`}
+                        >
+                          {item.label}
+                        </span>
+                      </div>
 
-                      <span
-                        className={`text-[15px] ${
-                          isItemActive
-                            ? "font-bold"
-                            : "font-medium"
-                        }`}
-                      >
-                        {item.label}
-                      </span>
-                    </div>
+                      {item.submenu && (
+                        <ChevronRight
+                          size={15}
+                          className={`transition-transform duration-300 ${
+                            isExpanded ? "rotate-90" : "opacity-40"
+                          }`}
+                        />
+                      )}
+                    </Link>
+                  </div>
 
-                    {item.submenu && (
-                      <ChevronRight
-                        size={15}
-                        className={`transition-transform duration-300 ${
-                          isExpanded
-                            ? "rotate-90"
-                            : "opacity-40"
-                        }`}
-                      />
-                    )}
-                  </Link>
-                </div>
-
-                {/* SUBMENU */}
-                {item.submenu &&
-                  item.subItems && (
+                  {/* SUBMENU */}
+                  {item.submenu && item.subItems && (
                     <div
                       className={`
                       overflow-hidden transition-all duration-300 ease-in-out pl-6
@@ -492,21 +467,16 @@ export default function Sidebar() {
                     `}
                     >
                       <div className="border-l-2 border-white/10 space-y-1 ml-4">
+                        {item.subItems.map((sub, si) => {
+                          const isSubActive =
+                            pathname === sub.href ||
+                            pathname.startsWith(sub.href + "/");
 
-                        {item.subItems.map(
-                          (sub, si) => {
-                            const isSubActive =
-                              pathname ===
-                                sub.href ||
-                              pathname.startsWith(
-                                sub.href + "/"
-                              );
-
-                            return (
-                              <Link
-                                key={si}
-                                href={sub.href}
-                                className={`
+                          return (
+                            <Link
+                              key={si}
+                              href={sub.href}
+                              className={`
                                 flex items-center space-x-3
                                 px-6 py-2.5
                                 rounded-xl text-sm
@@ -518,36 +488,30 @@ export default function Sidebar() {
                                     : "text-slate-400 hover:text-white hover:bg-white/5"
                                 }
                               `}
-                              >
-                                {sub.icon && (
-                                  <sub.icon
-                                    size={14}
-                                    className={
-                                      isSubActive
-                                        ? "text-cyan-300"
-                                        : "opacity-40"
-                                    }
-                                  />
-                                )}
+                            >
+                              {sub.icon && (
+                                <sub.icon
+                                  size={14}
+                                  className={
+                                    isSubActive ? "text-cyan-300" : "opacity-40"
+                                  }
+                                />
+                              )}
 
-                                <span>
-                                  {sub.label}
-                                </span>
-                              </Link>
-                            );
-                          }
-                        )}
+                              <span>{sub.label}</span>
+                            </Link>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
-              </div>
-            );
-          })}
+                </div>
+              );
+            })}
         </nav>
 
         {/* FOOTER */}
         <div className="p-8 relative z-10 border-t border-white/5 bg-black/10">
-
           <p className="text-[10px] text-white/30 uppercase text-center tracking-[0.2em]">
             Clinicore © 2026
           </p>
