@@ -1,365 +1,533 @@
-"use client";
+'use client';
 
-import { useState, useMemo } from 'react';
-import {
-  Search, Star, Trash2, Plus, Minus, ShoppingCart,
-  User, ChevronRight, Ticket, FileText, CreditCard,
-  Stethoscope, Syringe, PawPrint, Scissors, FlaskConical,
-  Pill, Clock, X,
-} from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Search, ScanBarcode, Filter, User, ChevronRight, Loader2, ShoppingBag, Printer, Pause, Tag, RefreshCw, X, CheckCircle2, AlertTriangle, XCircle } from 'lucide-react';
+import PosCarrito from '@/components/organisms/pos/PosCarrito';
+import ModalPago from '@/components/organisms/pos/ModalPago';
+import { DetalleVenta } from '@/types/ventas.types';
+import { promocionesService } from '@/services/promociones.service';
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface Producto {
+// --- Tipos de Datos alineados con el Backend ---
+type Product = {
   id: number;
-  nombre: string;
-  categoria: string;
-  precio: number;
-  icon: React.ElementType;
-  color: string;
-  favorito: boolean;
-}
+  name: string;
+  category: string;
+  price: number;
+  stock: number | null;
+  isService: boolean;
+  image?: string;
+};
 
-interface ItemCarrito extends Producto {
-  cantidad: number;
-}
+type Notificacion = {
+  id: number;
+  mensaje: string;
+  tipo: 'success' | 'error' | 'warning';
+};
 
-// ── Catálogo ──────────────────────────────────────────────────────────────────
+const CATEGORIES = ['Todos', 'Servicios Médicos', 'Vacunas', 'Farmacia', 'Alimentos', 'Accesorios'];
 
-const CATALOGO: Producto[] = [
-  { id: 1,  nombre: 'Consulta General',       categoria: 'Servicios',   precio: 85000,  icon: Stethoscope, color: 'bg-blue-50 text-blue-600',    favorito: true  },
-  { id: 2,  nombre: 'Vacuna Antirrábica',      categoria: 'Vacunas',     precio: 55000,  icon: Syringe,     color: 'bg-violet-50 text-violet-600', favorito: true  },
-  { id: 3,  nombre: 'Alimento ProPlan 3kg',    categoria: 'Nutrición',   precio: 89000,  icon: PawPrint,    color: 'bg-teal-50 text-teal-600',     favorito: true  },
-  { id: 4,  nombre: 'Desparasitación',         categoria: 'Servicios',   precio: 38000,  icon: Pill,        color: 'bg-emerald-50 text-emerald-600',favorito: true  },
-  { id: 5,  nombre: 'Grooming Completo',       categoria: 'Estética',    precio: 75000,  icon: Scissors,    color: 'bg-rose-50 text-rose-600',     favorito: true  },
-  { id: 6,  nombre: 'Perfil Bioquímico',       categoria: 'Laboratorio', precio: 120000, icon: FlaskConical,color: 'bg-amber-50 text-amber-600',   favorito: true  },
-  { id: 7,  nombre: 'Amoxicilina 250mg',       categoria: 'Farmacia',    precio: 18000,  icon: Pill,        color: 'bg-pink-50 text-pink-600',     favorito: false },
-  { id: 8,  nombre: 'Vacuna Parvovirus',       categoria: 'Vacunas',     precio: 62000,  icon: Syringe,     color: 'bg-violet-50 text-violet-600', favorito: false },
-  { id: 9,  nombre: 'Consulta Especializada',  categoria: 'Servicios',   precio: 140000, icon: Stethoscope, color: 'bg-blue-50 text-blue-600',    favorito: false },
-  { id: 10, nombre: 'Baño y Secado',           categoria: 'Estética',    precio: 45000,  icon: Scissors,    color: 'bg-rose-50 text-rose-600',     favorito: false },
-  { id: 11, nombre: 'Rx Torax',                categoria: 'Laboratorio', precio: 95000,  icon: FlaskConical,color: 'bg-amber-50 text-amber-600',   favorito: false },
-  { id: 12, nombre: 'Alimento Hills 2kg',      categoria: 'Nutrición',   precio: 72000,  icon: PawPrint,    color: 'bg-teal-50 text-teal-600',     favorito: false },
-];
+export default function PosPage() {
+  const [carrito, setCarrito] = useState<DetalleVenta[]>([]);
+  const [promociones, setPromociones] = useState<any[]>([]);
+  const [activeCategory, setActiveCategory] = useState('Todos');
+  const [isModalPagoOpen, setIsModalPagoOpen] = useState(false);
+  const [productos, setProductos] = useState<Product[]>([]);
+  const [loadingPromos, setLoadingPromos] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+// 🛡️ CONTROL DE ACCESOS
+  const esAdmin = true;
+  
+  // Estado para manejar las notificaciones dinámicas de la app
+  const [notificaciones, setNotificaciones] = useState<Notificacion[]>([]);
 
-const CATEGORIAS = ['Todos', 'Servicios', 'Vacunas', 'Farmacia', 'Nutrición', 'Estética', 'Laboratorio'];
+  // Estado para controlar la tasa impositiva dinámica (por defecto 15%)
+  const [tasaIva, setTasaIva] = useState<number>(15);
 
-const IVA = 0.19;
+  // Función helper para disparar las notificaciones visuales
+  const lanzarNotificacion = useCallback((mensaje: string, tipo: 'success' | 'error' | 'warning') => {
+    const id = Date.now();
+    setNotificaciones(prev => [...prev, { id, mensaje, tipo }]);
+    
+    // Auto-eliminar la notificación después de 4 segundos
+    setTimeout(() => {
+      setNotificaciones(prev => prev.filter(n => n.id !== id));
+    }, 4000);
+  }, []);
 
-function formatCOP(n: number) {
-  return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n);
-}
+  // 1. Carga inicial unificada mediante useCallback
+  const cargarDatosIniciales = useCallback(async () => {
+    setLoadingPromos(true);
+    try {
+      const promosVigentes = await promocionesService.getVigentes();
+      setPromociones(promosVigentes);
 
-// ── Modal pago ────────────────────────────────────────────────────────────────
+      const res = await fetch('http://localhost:3008/api/v1/ventas/productos');
+      const data = await res.json();
 
-function ModalPago({ total, onClose, onConfirm }: { total: number; onClose: () => void; onConfirm: () => void }) {
-  const [metodo, setMetodo] = useState<'efectivo' | 'tarjeta' | 'transferencia'>('efectivo');
-  const [recibido, setRecibido] = useState('');
-  const cambio = metodo === 'efectivo' ? Math.max(0, parseFloat(recibido || '0') - total) : 0;
+      const productosMapeados = data.map((p: any) => ({
+        id: p.id,
+        name: p.nombre,
+        category: p.categoria?.nombre || 'General',
+        price: Number(p.precioVenta),
+        stock: p.cantidadActual,
+        isService: p.categoria?.nombre.toLowerCase().includes('servicio'),
+        image: p.imagen || undefined
+      }));
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="text-lg font-bold text-gray-900">Procesar Pago</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={18} /></button>
-        </div>
-        <div className="text-center mb-5 py-4 bg-gray-50 rounded-xl">
-          <p className="text-sm text-gray-500 mb-1">Total a pagar</p>
-          <p className="text-3xl font-black text-gray-900">{formatCOP(total)}</p>
-        </div>
-        <div className="grid grid-cols-3 gap-2 mb-5">
-          {(['efectivo','tarjeta','transferencia'] as const).map(m => (
-            <button key={m} onClick={() => setMetodo(m)}
-              className={`py-2.5 rounded-xl text-xs font-bold capitalize border transition-all ${metodo === m ? 'text-white border-transparent' : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'}`}
-              style={metodo === m ? { background: 'linear-gradient(135deg,#0e314d,#0a8661)' } : {}}>
-              {m === 'efectivo' ? 'Efectivo' : m === 'tarjeta' ? 'Tarjeta' : 'Transferencia'}
-            </button>
-          ))}
-        </div>
-        {metodo === 'efectivo' && (
-          <div className="mb-4">
-            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Monto recibido</label>
-            <input type="number" value={recibido} onChange={e => setRecibido(e.target.value)}
-              placeholder="0"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 text-lg font-bold text-center focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-100 transition-all" />
-            {parseFloat(recibido) >= total && (
-              <div className="mt-2 flex justify-between text-sm font-semibold">
-                <span className="text-gray-500">Cambio:</span>
-                <span className="text-emerald-600">{formatCOP(cambio)}</span>
-              </div>
-            )}
-          </div>
-        )}
-        <button onClick={onConfirm}
-          disabled={metodo === 'efectivo' && parseFloat(recibido || '0') < total}
-          className="w-full py-3.5 rounded-xl text-sm font-bold text-white disabled:opacity-40 hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-2"
-          style={{ background: 'linear-gradient(135deg,#0e314d,#0a8661)' }}>
-          <CreditCard size={18} /> Confirmar Pago
-        </button>
-      </div>
-    </div>
-  );
-}
+      setProductos(productosMapeados);
+    } catch (error) {
+      lanzarNotificacion("Error crítico al cargar el catálogo de productos.", "error");
+      console.error(error);
+    } finally {
+      setLoadingPromos(false);
+    }
+  }, [lanzarNotificacion]);
 
-// ── Page ─────────────────────────────────────────────────────────────────────
+  // 2. Un único useEffect controlador de ciclo de vida
+  useEffect(() => {
+    cargarDatosIniciales();
+  }, [cargarDatosIniciales]);
 
-export default function POSPage() {
-  const [carrito, setCarrito]     = useState<ItemCarrito[]>([]);
-  const [busqueda, setBusqueda]   = useState('');
-  const [categoria, setCategoria] = useState('Todos');
-  const [cliente, setCliente]     = useState('Juan Pérez');
-  const [notas, setNotas]         = useState('');
-  const [modalPago, setModalPago] = useState(false);
-  const [exito, setExito]         = useState(false);
+  // 3. Acción del botón para sincronización manual entre microservicios
+  const handleSyncCatalog = async () => {
+    try {
+      setIsSyncing(true);
+      const res = await fetch('http://localhost:3008/api/v1/ventas/sync-productos', { method: 'POST' }); 
+      if (!res.ok) throw new Error('Error en la respuesta del servidor');
 
-  const productos = useMemo(() => CATALOGO.filter(p => {
-    const q = busqueda.toLowerCase();
-    return (!q || p.nombre.toLowerCase().includes(q) || p.categoria.toLowerCase().includes(q))
-      && (categoria === 'Todos' || p.categoria === categoria);
-  }), [busqueda, categoria]);
+      await cargarDatosIniciales();
+      lanzarNotificacion('Catálogo sincronizado con éxito desde el inventario maestro.', 'success');
+    } catch (error) {
+      console.error("Error en sincronización manual:", error);
+      lanzarNotificacion('No se pudo sincronizar el catálogo de productos.', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
-  const favoritos = CATALOGO.filter(p => p.favorito);
+  // Filtrado reactivo del catálogo
+  const filteredProducts = activeCategory === 'Todos' 
+    ? productos 
+    : productos.filter(p => p.category === activeCategory);
 
-  const agregar = (p: Producto) => {
+  // Candado 1: Validación de stock al hacer click en la tarjeta del producto
+  const handleAgregarAlCarrito = (producto: Product) => {
+    if (!producto.isService && producto.stock !== null && producto.stock <= 0) {
+      lanzarNotificacion(`El producto "${producto.name}" se encuentra totalmente agotado.`, 'error');
+      return;
+    }
+
+    let limiteAlcanzado = false;
+
     setCarrito(prev => {
-      const ex = prev.find(i => i.id === p.id);
-      if (ex) return prev.map(i => i.id === p.id ? { ...i, cantidad: i.cantidad + 1 } : i);
-      return [...prev, { ...p, cantidad: 1 }];
+      const existente = prev.find(item => item.productoId === producto.id);
+      
+      if (existente) {
+        // Validamos si agregar 1 más supera las existencias físicas
+        if (!producto.isService && producto.stock !== null && existente.cantidad >= producto.stock) {
+          limiteAlcanzado = true;
+          return prev;
+        }
+        return prev.map(item => item.productoId === producto.id 
+          ? { ...item, cantidad: item.cantidad + 1, subtotal: (item.cantidad + 1) * item.precioUnitario }
+          : item
+        );
+      }
+      
+      return [...prev, {
+        id: Date.now(),
+        productoId: producto.id,
+        nombreProducto: producto.name,
+        cantidad: 1,
+        precioUnitario: producto.price,
+        subtotal: producto.price
+      }];
     });
+
+    if (limiteAlcanzado) {
+      lanzarNotificacion(`Acción bloqueada: Solo hay ${producto.stock} unidades de "${producto.name}" disponibles.`, 'warning');
+    }
   };
 
-  const cambiarCantidad = (id: number, delta: number) => {
-    setCarrito(prev => prev
-      .map(i => i.id === id ? { ...i, cantidad: Math.max(0, i.cantidad + delta) } : i)
-      .filter(i => i.cantidad > 0));
+  // Candado 2: Validación al alterar las cantidades desde el input o botones del carrito (+/-)
+  const handleUpdateQuantity = (productoId: number, nuevaCantidad: number) => {
+    const productoOriginal = productos.find(p => p.id === productoId);
+
+    if (productoOriginal && !productoOriginal.isService && productoOriginal.stock !== null) {
+      if (nuevaCantidad > productoOriginal.stock) {
+        lanzarNotificacion(`Operación inválida: El stock máximo de ${productoOriginal.name} es de ${productoOriginal.stock} unidades.`, 'warning');
+        return; 
+      }
+    }
+
+    if (nuevaCantidad <= 0) {
+      handleRemoveItem(productoId);
+      return;
+    }
+
+    setCarrito(prev => prev.map(item => item.productoId === productoId
+      ? { ...item, cantidad: nuevaCantidad, subtotal: nuevaCantidad * item.precioUnitario }
+      : item
+    ));
   };
 
-  const eliminar = (id: number) => setCarrito(prev => prev.filter(i => i.id !== id));
-  const limpiar  = () => setCarrito([]);
+  const handleRemoveItem = (productoId: number) => {
+    setCarrito(prev => prev.filter(item => item.productoId !== productoId));
+  };
 
-  const subtotal  = carrito.reduce((s, i) => s + i.precio * i.cantidad, 0);
-  const iva       = Math.round(subtotal * IVA);
-  const total     = subtotal + iva;
-  const totalItems = carrito.reduce((s, i) => s + i.cantidad, 0);
+  const handleClearCart = () => setCarrito([]);
 
-  const confirmarPago = () => {
-    setModalPago(false);
-    setExito(true);
-    setTimeout(() => { setExito(false); limpiar(); }, 3000);
+  // Cálculos consolidados aplicando el IVA corporativo del 15%
+  const subtotal = carrito.reduce((acc, item) => acc + item.subtotal, 0);
+  const impuesto = subtotal * (tasaIva / 100); 
+  const total = subtotal + impuesto;
+
+// Cambiar la firma de la función para tipar estrictamente los pagos admitidos
+const handleConfirmarCobro = async (
+    pagosRegistrados: { metodoPagoId: number; monto: number; montoRecibido?: number; referencia?: string }[], 
+    tipoComprobanteSeleccionado: 'TICKET' | 'FACTURA'
+  ) => {
+    
+    if (!pagosRegistrados || pagosRegistrados.length === 0) {
+      lanzarNotificacion('⚠️ Debes especificar al menos un método de pago válido.', 'error');
+      return;
+    }
+
+    const pagoEfectivo = pagosRegistrados.find(p => p.metodoPagoId === 1);
+    const totalRedondeado = Math.round(total * 100) / 100;
+    
+    // 1. Identificar el tipo de pago real para la raíz
+    let metodoPagoRaiz = 2; // Por defecto Tarjeta
+    if (pagosRegistrados.length > 1) {
+      metodoPagoRaiz = 3; // 👈 Si hay más de un método, es MIXTO (ID: 3)
+    } else if (pagoEfectivo) {
+      metodoPagoRaiz = 1; // Si hay solo uno y es efectivo
+    }
+
+    // 2. Si es efectivo o mixto, usamos el montoRecibido numérico directo enviado por el modal.
+    let montoRecibido = pagoEfectivo && pagoEfectivo.montoRecibido !== undefined 
+      ? pagoEfectivo.montoRecibido 
+      : totalRedondeado;
+
+    const payloadVenta = {
+      tipoComprobante: tipoComprobanteSeleccionado, 
+      clienteId: 1, 
+      total: totalRedondeado,                                 
+      montoPagadoCon: Math.round(montoRecibido * 100) / 100,                
+      metodoPagoId: metodoPagoRaiz, 
+      pagos: pagosRegistrados.map(p => ({
+        metodoPagoId: Number(p.metodoPagoId),
+        monto: Math.round(Number(p.monto) * 100) / 100,
+        referencia: p.referencia || null
+      })), 
+      detalles: carrito.map(item => ({
+        productoId: item.productoId,
+        cantidad: item.cantidad,
+        precioUnitario: Math.round(Number(item.precioUnitario) * 100) / 100
+      }))
+    };
+
+    try {
+      const response = await fetch("http://localhost:3008/api/v1/ventas", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payloadVenta),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error("Error detallado del servidor:", errorData);
+        
+        const servidorMensaje = errorData.message || '';
+        const mensajePlano = Array.isArray(servidorMensaje) ? servidorMensaje.join(' ') : servidorMensaje;
+
+        if (mensajePlano.toLowerCase().includes('falta de efectivo') || mensajePlano.toLowerCase().includes('insuficientes')) {
+          throw new Error('FALTA_EFECTIVO');
+        } else {
+          lanzarNotificacion(`Error del servidor: ${mensajePlano}`, 'error');
+          throw new Error(mensajePlano);
+        }
+      }
+      
+      lanzarNotificacion('🎉 ¡Venta procesada con éxito y stock descontado!', 'success');
+      setCarrito([]);
+      setIsModalPagoOpen(false);
+      
+      await cargarDatosIniciales();
+    } catch (err: any) {
+      console.error("Error capturado en PosPage:", err);
+      if (err.message === 'FALTA_EFECTIVO') {
+        throw err; 
+      }
+      lanzarNotificacion('Hubo un problema de conexión al enviar la transacción.', 'error');
+      throw err;
+    }
   };
 
   return (
-    <div className="flex gap-0 -m-6 h-[calc(100vh-64px)]" style={{ margin: '-1.5rem' }}>
-
-      {/* ── Panel izquierdo: catálogo ───────────────────────────────────── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-
-        {/* Barra búsqueda + cliente */}
-        <div className="p-4 border-b border-gray-100 bg-white space-y-3">
-
-          {/* Search */}
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input value={busqueda} onChange={e => setBusqueda(e.target.value)}
-                placeholder="Buscar producto, servicio o código de barras…"
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-100 transition-all" />
+    <div className="flex flex-col lg:flex-row h-[calc(100vh-4rem)] bg-slate-50 text-slate-800 font-sans -m-6 overflow-hidden relative">
+      
+      {/* CONTENEDOR DE NOTIFICACIONES FLOTANTES */}
+      <div className="absolute top-4 right-4 z-50 flex flex-col gap-2 max-w-md w-full sm:w-96">
+        {notificaciones.map(n => (
+          <div 
+            key={n.id} 
+            className={`p-4 rounded-xl shadow-xl border flex items-start gap-3 transition-all duration-300 transform translate-y-0 animate-in fade-in slide-in-from-top-4 ${
+              n.tipo === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-900' :
+              n.tipo === 'error' ? 'bg-rose-50 border-rose-200 text-rose-900' :
+              'bg-amber-50 border-amber-200 text-amber-900'
+            }`}
+          >
+            <div className="mt-0.5">
+              {n.tipo === 'success' && <CheckCircle2 size={18} className="text-emerald-600" />}
+              {n.tipo === 'error' && <XCircle size={18} className="text-rose-600" />}
+              {n.tipo === 'warning' && <AlertTriangle size={18} className="text-amber-600" />}
             </div>
-          </div>
-
-          {/* Cliente */}
-          <div className="flex items-center justify-between p-3 rounded-xl bg-gray-50 border border-gray-100">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-teal-100 flex items-center justify-center">
-                <User size={15} className="text-teal-600" />
-              </div>
-              <div>
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider font-bold">Cliente</p>
-                <p className="text-sm font-semibold text-gray-900">{cliente}</p>
-              </div>
-            </div>
-            <button className="text-xs font-semibold text-teal-600 hover:text-teal-700 flex items-center gap-1">
-              Cambiar <ChevronRight size={13} />
+            <div className="flex-1 text-xs font-semibold leading-normal">{n.mensaje}</div>
+            <button 
+              onClick={() => setNotificaciones(prev => prev.filter(item => item.id !== n.id))}
+              className="text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              <X size={14} />
             </button>
           </div>
+        ))}
+      </div>
 
-          {/* Categorías */}
-          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-            {CATEGORIAS.map(c => (
-              <button key={c} onClick={() => setCategoria(c)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap border transition-all flex-shrink-0 ${categoria === c ? 'text-white border-transparent' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                style={categoria === c ? { background: 'linear-gradient(135deg,#0e314d,#0a8661)' } : {}}>
-                {c}
+      {/* SECCIÓN IZQUIERDA: CATÁLOGO */}
+      <section className="flex-1 p-6 overflow-y-auto">
+        <div className="max-w-6xl mx-auto space-y-6">
+          
+          <div className="flex justify-between items-end mb-4">
+            <div>
+              <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Punto de Venta</h1>
+              <p className="text-slate-500 text-sm mt-1">Selecciona productos o servicios para la transacción actual.</p>
+            </div>
+            <div className="flex gap-2">
+              <button 
+                onClick={handleSyncCatalog}
+                disabled={isSyncing}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-50 border border-blue-200 text-blue-700 rounded-xl font-medium text-sm hover:bg-blue-100 shadow-sm transition-colors disabled:opacity-50"
+              >
+                <RefreshCw size={16} className={isSyncing ? "animate-spin" : ""} /> 
+                {isSyncing ? 'Sincronizando...' : 'Sincronizar'}
+              </button>
+
+              <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl font-medium text-sm hover:bg-slate-50 shadow-sm">
+                <ScanBarcode size={16} /> Escanear
+              </button>
+              <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl font-medium text-sm hover:bg-slate-50 shadow-sm">
+                <Filter size={16} /> Filtros
+              </button>
+            </div>
+          </div>
+
+          {/* Filtros de Categoría */}
+          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+            {CATEGORIES.map(cat => (
+              <button
+                key={cat}
+                onClick={() => setActiveCategory(cat)}
+                className={`px-5 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-all ${
+                  activeCategory === cat 
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' 
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                {cat}
               </button>
             ))}
           </div>
-        </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-5">
-
-          {/* Favoritos */}
-          {categoria === 'Todos' && !busqueda && (
-            <div>
-              <h2 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
-                <Star size={15} className="text-amber-500 fill-amber-500" /> Productos Favoritos
-              </h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                {favoritos.map(p => {
-                  const Icon = p.icon;
-                  const en = carrito.find(i => i.id === p.id);
-                  return (
-                    <button key={p.id} onClick={() => agregar(p)}
-                      className={`relative p-4 rounded-xl border text-left hover:shadow-md active:scale-95 transition-all group ${en ? 'border-teal-300 bg-teal-50' : 'bg-white border-gray-100 hover:border-teal-200'}`}>
-                      <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform ${p.color}`}>
-                        <Icon size={20} />
-                      </div>
-                      <p className="text-xs font-semibold text-gray-900 leading-tight mb-1">{p.nombre}</p>
-                      <p className="text-xs font-bold text-teal-600">{formatCOP(p.precio)}</p>
-                      {en && (
-                        <span className="absolute top-2 right-2 w-5 h-5 bg-teal-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                          {en.cantidad}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Todos los productos */}
-          <div>
-            {(categoria !== 'Todos' || busqueda) && (
-              <h2 className="text-sm font-bold text-gray-700 mb-3">{categoria === 'Todos' ? 'Resultados' : categoria}</h2>
-            )}
-            {categoria === 'Todos' && !busqueda && (
-              <h2 className="text-sm font-bold text-gray-700 mb-3">Todos los productos</h2>
-            )}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              {productos.map(p => {
-                const Icon = p.icon;
-                const en = carrito.find(i => i.id === p.id);
-                return (
-                  <button key={p.id} onClick={() => agregar(p)}
-                    className={`relative p-4 rounded-xl border text-left hover:shadow-md active:scale-95 transition-all group ${en ? 'border-teal-300 bg-teal-50' : 'bg-white border-gray-100 hover:border-teal-200'}`}>
-                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center mb-3 group-hover:scale-110 transition-transform ${p.color}`}>
-                      <Icon size={20} />
-                    </div>
-                    <p className="text-xs font-semibold text-gray-900 leading-tight mb-1">{p.nombre}</p>
-                    <p className="text-xs font-bold text-teal-600">{formatCOP(p.precio)}</p>
-                    {en && (
-                      <span className="absolute top-2 right-2 w-5 h-5 bg-teal-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                        {en.cantidad}
+          {/* Grid del Catálogo */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
+            {filteredProducts.map(product => (
+              <div 
+                key={product.id}
+                onClick={() => handleAgregarAlCarrito(product)}
+                className="group bg-white rounded-xl p-4 flex flex-col gap-3 transition-all hover:shadow-xl border border-slate-100 cursor-pointer overflow-hidden"
+              >
+                <div className={`aspect-square rounded-lg overflow-hidden flex items-center justify-center ${product.isService ? 'bg-blue-50' : 'bg-slate-100'}`}>
+                  {product.image ? (
+                    <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  ) : (
+                    <Tag size={40} className="text-blue-400 opacity-60" />
+                  )}
+                </div>
+                <div className="flex flex-col flex-1 justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-blue-600 tracking-wider uppercase opacity-80">{product.category}</span>
+                    <h3 className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors line-clamp-2 mt-1 text-sm">{product.name}</h3>
+                  </div>
+                  <div className="flex justify-between items-center mt-3">
+                    <span className="text-base font-black text-slate-900">${product.price.toFixed(2)}</span>
+                    {product.isService ? (
+                      <span className="text-xs font-medium text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">Servicio</span>
+                    ) : (
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                        (product.stock ?? 0) <= 0 
+                          ? 'text-rose-700 bg-rose-100' 
+                          : (product.stock ?? 0) <= 5 
+                          ? 'text-amber-700 bg-amber-100' 
+                          : 'text-emerald-700 bg-emerald-100'
+                      }`}>
+                        Stock: {product.stock}
                       </span>
                     )}
-                  </button>
-                );
-              })}
-              {productos.length === 0 && (
-                <div className="col-span-4 py-12 text-center text-gray-400 text-sm">Sin resultados para "{busqueda}"</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* ================= BARRA LATERAL DE CONFIGURACIONES COMERCIALES ================= */}
+        <div className="space-y-4">
+          
+          {/* Monitor de Campañas */}
+          <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
+            <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider mb-2">Promociones Activas (Backend)</h3>
+            {loadingPromos ? (
+              <div className="flex items-center gap-2 text-xs text-slate-500">
+                <Loader2 className="animate-spin" size={14}/> Sincronizando políticas de precio...
+              </div>
+            ) : promociones.length === 0 ? (
+              <p className="text-xs text-slate-400 italic">No hay reglas promocionales registradas para hoy.</p>
+            ) : (
+              <div className="space-y-2">
+                {promociones.map((p: any) => (
+                  <div key={p.id} className="p-2 bg-purple-50 text-purple-800 rounded-lg text-xs font-medium border border-purple-100">
+                    {p.nombre} — {p.tipoDescuento} ({p.valorDescuento}%)
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          {/* 🚀 CONTROLADOR DINÁMICO FISCAL (IVA OPERATIVO) - PREPARADO PARA ROLES */}
+            {esAdmin && (
+              <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm space-y-3 animate-fade-in">
+                <div className="flex justify-between items-center">
+                  <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider">Regulación Fiscal (IVA)</h3>
+                  <span className="text-[10px] font-black bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-full">
+                    Activo: {tasaIva}%
+                  </span>
+                </div>
+
+                {/* Selectores rápidos de tasas comunes */}
+                <div className="grid grid-cols-4 gap-1.5">
+                  {[0, 5, 15, 19].map((tasa) => (
+                    <button
+                      key={tasa}
+                      type="button"
+                      onClick={() => setTasaIva(tasa)}
+                      className={`py-1 text-[11px] font-bold rounded-lg border transition-all active:scale-95 ${
+                        tasaIva === tasa
+                          ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
+                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      {tasa}%
+                    </button>
+                  ))}
+                </div>
+
+                {/* Entrada manual fina */}
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.5"
+                    placeholder="Tasa personalizada"
+                    value={tasaIva}
+                    onChange={(e) => setTasaIva(Math.max(0, parseFloat(e.target.value) || 0))}
+                    className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 text-slate-800 rounded-lg text-xs font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-slate-400 font-bold pointer-events-none">
+                    % Manual
+                  </span>
+                </div>
+              </div>
+            )}
+        </div>
+
+        </div>
+      </section>
+
+      {/* SECCIÓN DERECHA: SIDEBAR DE COMPRA */}
+      <aside className="w-full lg:w-96 bg-white shadow-2xl flex flex-col z-10 border-l border-slate-200">
+        <div className="p-6 flex flex-col h-full">
+          
+          <div className="mb-4">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold text-slate-900">Orden Actual</h2>
+              {carrito.length > 0 && (
+                <button onClick={handleClearCart} className="text-red-500 text-xs font-bold flex items-center gap-1 hover:bg-red-50 px-2 py-1 rounded-lg transition-colors">
+                  Vaciar Carrito
+                </button>
               )}
             </div>
-          </div>
-
-          {/* Notas */}
-          <div className="bg-white rounded-xl border border-gray-100 p-4">
-            <h3 className="text-sm font-bold text-gray-700 mb-2 flex items-center gap-2"><FileText size={14} /> Notas de venta</h3>
-            <textarea value={notas} onChange={e => setNotas(e.target.value)}
-              placeholder="Añadir observación interna…"
-              className="w-full h-20 resize-none rounded-xl border border-gray-200 p-3 text-sm focus:outline-none focus:border-teal-400 focus:ring-2 focus:ring-teal-100 transition-all bg-gray-50" />
-          </div>
-        </div>
-      </div>
-
-      {/* ── Panel derecho: carrito ─────────────────────────────────────────── */}
-      <div className="w-[360px] flex-shrink-0 border-l border-gray-200 bg-white flex flex-col">
-
-        {/* Header carrito */}
-        <div className="p-5 border-b border-gray-100">
-          <div className="flex items-center justify-between mb-1">
-            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <ShoppingCart size={20} className="text-teal-600" /> Carrito
-            </h2>
-            <span className="bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full text-xs font-bold">
-              {totalItems} items
-            </span>
-          </div>
-          <p className="text-xs text-gray-400 flex items-center gap-1">
-            <Clock size={12} /> Sesión: {new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
-          </p>
-        </div>
-
-        {/* Items */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {carrito.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-40 text-gray-300">
-              <ShoppingCart size={40} className="mb-3 opacity-30" />
-              <p className="text-sm">El carrito está vacío</p>
-              <p className="text-xs mt-1">Selecciona productos del catálogo</p>
-            </div>
-          ) : carrito.map(item => (
-            <div key={item.id} className="p-3 rounded-xl border border-gray-100 bg-gray-50 space-y-2.5">
-              <div className="flex justify-between items-start gap-2">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-gray-900 truncate">{item.nombre}</p>
-                  <p className="text-xs text-gray-400">{item.categoria}</p>
-                </div>
-                <button onClick={() => eliminar(item.id)} className="text-gray-300 hover:text-red-500 transition-colors flex-shrink-0">
-                  <Trash2 size={15} />
-                </button>
+            
+            <div className="p-3 bg-slate-50 rounded-xl border border-dashed border-slate-300 flex items-center gap-3 cursor-pointer hover:bg-slate-100 transition-colors">
+              <div className="w-9 h-9 rounded-full bg-white shadow-sm flex items-center justify-center text-blue-600">
+                <User size={18} />
               </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg overflow-hidden">
-                  <button onClick={() => cambiarCantidad(item.id, -1)} className="px-2 py-1 hover:bg-gray-100 text-teal-600 transition-colors">
-                    <Minus size={13} />
-                  </button>
-                  <span className="px-2.5 text-sm font-bold text-gray-900 min-w-[24px] text-center">{item.cantidad}</span>
-                  <button onClick={() => cambiarCantidad(item.id, 1)} className="px-2 py-1 hover:bg-gray-100 text-teal-600 transition-colors">
-                    <Plus size={13} />
-                  </button>
-                </div>
-                <p className="text-sm font-bold text-gray-900">{formatCOP(item.precio * item.cantidad)}</p>
+              <div className="flex-1">
+                <p className="text-xs font-bold text-slate-800">Público General</p>
+                <p className="text-[11px] text-slate-500">Venta de mostrador directa</p>
+              </div>
+              <ChevronRight size={16} className="text-slate-400" />
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto pr-1">
+            <PosCarrito 
+              items={carrito} 
+              onUpdateQuantity={handleUpdateQuantity} 
+              onRemoveItem={handleRemoveItem} 
+            />
+          </div>
+
+          <div className="mt-4 pt-4 border-t border-slate-200 space-y-4">
+            <div className="space-y-1.5 text-xs text-slate-600">
+              <div className="flex justify-between"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
+              <div className="flex justify-between text-sm text-slate-600 font-medium">
+                <span>Impuesto ({tasaIva}%)</span>
+                <span className="text-slate-900 font-bold">${impuesto.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center pt-2 border-t font-bold text-slate-950 text-sm">
+                <span>Total</span><span className="text-2xl font-black text-blue-600">${total.toFixed(2)}</span>
               </div>
             </div>
-          ))}
-        </div>
 
-        {/* Totales + acciones */}
-        <div className="p-5 border-t border-gray-100 bg-gray-50 space-y-4">
-          {exito && (
-            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm font-semibold text-center">
-              ✓ Pago procesado exitosamente
+            <div className="grid grid-cols-2 gap-3">
+              <button className="py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs flex flex-col items-center gap-1 hover:bg-slate-200 transition-colors">
+                <Printer size={16} /> <span>Imprimir</span>
+              </button>
+              <button className="py-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-xs flex flex-col items-center gap-1 hover:bg-slate-200 transition-colors">
+                <Pause size={16} /> <span>Pausar</span>
+              </button>
             </div>
-          )}
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm"><span className="text-gray-500">Subtotal</span><span className="text-gray-900">{formatCOP(subtotal)}</span></div>
-            <div className="flex justify-between text-sm"><span className="text-gray-500">IVA (19%)</span><span className="text-gray-900">{formatCOP(iva)}</span></div>
-            <div className="flex justify-between text-sm"><span className="text-gray-500 flex items-center gap-1"><Ticket size={13}/> Descuento</span><span className="text-violet-600">-{formatCOP(0)}</span></div>
-            <div className="flex justify-between items-center pt-2 border-t border-gray-200">
-              <span className="font-bold text-gray-900">Total</span>
-              <span className="text-2xl font-black text-teal-700">{formatCOP(total)}</span>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <button onClick={limpiar} className="py-2.5 rounded-xl border border-red-200 text-red-500 hover:bg-red-50 text-xs font-bold transition-colors">
-              Cancelar
-            </button>
-            <button className="py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-100 text-xs font-bold transition-colors">
-              Cotización
+            <button 
+              onClick={() => setIsModalPagoOpen(true)}
+              disabled={carrito.length === 0}
+              className="w-full py-3.5 bg-blue-600 text-white font-extrabold rounded-xl shadow-lg shadow-blue-600/20 hover:bg-blue-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span>Proceder al Cobro</span>
             </button>
           </div>
-
-          <button onClick={() => carrito.length > 0 && setModalPago(true)} disabled={carrito.length === 0}
-            className="w-full py-4 rounded-xl text-sm font-black text-white disabled:opacity-40 hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-2"
-            style={{ background: 'linear-gradient(135deg,#0e314d,#0a8661)' }}>
-            <CreditCard size={18} /> PAGAR · {formatCOP(total)}
-          </button>
         </div>
-      </div>
+      </aside>
 
-      {modalPago && <ModalPago total={total} onClose={() => setModalPago(false)} onConfirm={confirmarPago} />}
+      <ModalPago 
+        isOpen={isModalPagoOpen} 
+        onClose={() => setIsModalPagoOpen(false)} 
+        totalAPagar={total} 
+        onConfirmarPago={handleConfirmarCobro} 
+      />
     </div>
   );
 }

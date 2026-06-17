@@ -246,6 +246,10 @@ const navItems = [
         href: "/usuarios",
         icon: Shield,
       },
+      { label: "Lista de Productos", href: "/productos/listar", icon: List },
+      { label: "Crear Producto", href: "/productos/nuevo", icon: PlusCircle },
+      { label: "Generar Reporte", href: "/productos/reporte", icon: FileDown },
+      { label: "Editar Producto", href: "/productos/editar", icon: Edit3 },
     ],
   },
 
@@ -260,6 +264,23 @@ const navItems = [
         href: "/integraciones",
         icon: PlugZap,
       },
+      { label: "Ver Agenda", href: "/agenda", icon: Calendar },
+      { label: "Nueva Cita", href: "/agenda/nueva-cita", icon: PlusCircle },
+      { label: "Sala Espera", href: "/agenda/sala-espera", icon: Clock },
+    ],
+  },
+
+  // 🛒 SECCIÓN PUNTO DE VENTA ENRIQUECIDA CON TUS NUEVAS RUTAS
+  {
+    icon: Store,
+    label: "Punto de Venta",
+    href: "/pos",
+    submenu: true,
+    subItems: [
+      { label: "Terminal POS", href: "/pos", icon: Store },
+      { label: "Historial Ventas", href: "/ventas", icon: FileText },
+      { label: "Simulador Precios", href: "/precios", icon: BarChart3 },
+      { label: "Control de Caja", href: "/cierres-caja", icon: List },
     ],
   },
 
@@ -286,11 +307,8 @@ const navItems = [
 
 export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(false);
-
   const [expandedItem, setExpandedItem] = useState<string | null>(null);
-
   const pathname = usePathname();
-
   const [rolId, setRolId] = useState<number>(0);
 
   useEffect(() => {
@@ -319,7 +337,6 @@ export default function Sidebar() {
   const Bubbles = () => (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
       <div className="absolute top-[-10%] right-[-10%] w-72 h-72 bg-cyan-500/10 rounded-full blur-[100px]" />
-
       <div className="absolute bottom-[-5%] left-[-5%] w-80 h-80 bg-emerald-500/20 rounded-full blur-[90px]" />
     </div>
   );
@@ -411,19 +428,19 @@ export default function Sidebar() {
                         }
                       }}
                       className={`
-                      group
-                      flex items-center justify-between
-                      px-5 py-3.5
-                      rounded-2xl
-                      transition-all duration-300
-                      relative overflow-hidden
+                        group
+                        flex items-center justify-between
+                        px-5 py-3.5
+                        rounded-2xl
+                        transition-all duration-300
+                        relative overflow-hidden
 
-                      ${
-                        isItemActive
-                          ? "bg-white/20 backdrop-blur-md border border-white/15"
-                          : "hover:bg-white/10 text-slate-300 hover:text-white"
-                      }
-                    `}
+                        ${
+                          isItemActive
+                            ? "bg-white/20 backdrop-blur-md border border-white/15"
+                            : "hover:bg-white/10 text-slate-300 hover:text-white"
+                        }
+                      `}
                     >
                       <div className="flex items-center space-x-4 relative z-10">
                         <item.icon
@@ -457,14 +474,9 @@ export default function Sidebar() {
                   {item.submenu && item.subItems && (
                     <div
                       className={`
-                      overflow-hidden transition-all duration-300 ease-in-out pl-6
-
-                      ${
-                        isExpanded
-                          ? "max-h-96 opacity-100 mt-1 mb-2"
-                          : "max-h-0 opacity-0"
-                      }
-                    `}
+                        overflow-hidden transition-all duration-300 ease-in-out pl-6
+                        ${isExpanded ? "max-h-96 opacity-100 mt-1 mb-2" : "max-h-0 opacity-0"}
+                      `}
                     >
                       <div className="border-l-2 border-white/10 space-y-1 ml-4">
                         {item.subItems.map((sub, si) => {
