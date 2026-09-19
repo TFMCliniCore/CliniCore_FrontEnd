@@ -63,16 +63,40 @@ export default function PosPage() {
 
       const res = await fetch('http://localhost:3008/api/v1/ventas/productos');
       const data = await res.json();
+      
+      // 🔍 Abre la consola del navegador para ver la estructura exacta de tus productos
+      console.log("📦 Productos crudos del Backend:", data);
 
-      const productosMapeados = data.map((p: any) => ({
-        id: p.id,
-        name: p.nombre,
-        category: p.categoria?.nombre || 'General',
-        price: Number(p.precioVenta),
-        stock: p.cantidadActual,
-        isService: p.categoria?.nombre.toLowerCase().includes('servicio'),
-        image: p.imagen || undefined
-      }));
+          const productosMapeados = data.map((p: any) => {
+          let rutaCompletaImagen = undefined;
+
+          if (p.imagen && p.imagen.trim() !== "") {
+            if (p.imagen.startsWith('http://') || p.imagen.startsWith('https://')) {
+              rutaCompletaImagen = p.imagen;
+            } else {
+              // Aseguramos que la ruta tenga el slash inicial
+              let cleanPath = p.imagen.startsWith('/') ? p.imagen : `/${p.imagen}`;
+              
+              // 💡 CORRECCIÓN: Si el backend de ventas guardó la ruta sin '/api/v1', se lo anteponemos
+              if (!cleanPath.startsWith('/api/v1')) {
+                cleanPath = `/api/v1${cleanPath}`;
+              }
+              
+              // Apuntar al puerto 3007 de Inventario maestro
+              rutaCompletaImagen = `http://localhost:3007${cleanPath}`; 
+            }
+          }
+
+          return {
+            id: p.id,
+            name: p.nombre,
+            category: p.categoria || 'General',
+            price: Number(p.precioVenta),
+            stock: p.cantidadActual,
+            isService: p.categoria ? p.categoria.toLowerCase().includes('servicio') : false,
+            image: rutaCompletaImagen 
+          };
+        });
 
       setProductos(productosMapeados);
     } catch (error) {
@@ -343,43 +367,64 @@ const handleConfirmarCobro = async (
 
           {/* Grid del Catálogo */}
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
-            {filteredProducts.map(product => (
-              <div 
-                key={product.id}
-                onClick={() => handleAgregarAlCarrito(product)}
-                className="group bg-white rounded-xl p-4 flex flex-col gap-3 transition-all hover:shadow-xl border border-slate-100 cursor-pointer overflow-hidden"
-              >
-                <div className={`aspect-square rounded-lg overflow-hidden flex items-center justify-center ${product.isService ? 'bg-blue-50' : 'bg-slate-100'}`}>
-                  {product.image ? (
-                    <img src={product.image} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                  ) : (
-                    <Tag size={40} className="text-blue-400 opacity-60" />
-                  )}
-                </div>
-                <div className="flex flex-col flex-1 justify-between">
-                  <div>
-                    <span className="text-xs font-bold text-blue-600 tracking-wider uppercase opacity-80">{product.category}</span>
-                    <h3 className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors line-clamp-2 mt-1 text-sm">{product.name}</h3>
+            {filteredProducts.map(product => {
+              // Estado local por tarjeta o un truco rápido inline con el target de la imagen en onError:
+              return (
+                <div 
+                  key={product.id}
+                  onClick={() => handleAgregarAlCarrito(product)}
+                  className="group bg-white rounded-xl p-4 flex flex-col gap-3 transition-all hover:shadow-xl border border-slate-100 cursor-pointer overflow-hidden"
+                >
+                  <div className={`aspect-square rounded-lg overflow-hidden flex items-center justify-center relative ${product.isService ? 'bg-blue-50' : 'bg-slate-100'}`}>
+                    {product.image ? (
+                      <img 
+                        src={product.image} 
+                        alt={product.name} 
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        onError={(e) => {
+                          // 💡 Si la imagen da error 404 en el servidor, la ocultamos y mostramos el contenedor alternativo
+                          e.currentTarget.style.display = 'none';
+                          const sibling = e.currentTarget.nextElementSibling as HTMLElement;
+                          if (sibling) sibling.style.display = 'flex';
+                        }}
+                      />
+                    ) : null}
+
+                    {/* Este contenedor actuará como fallback si no hay imagen o si la URL falla */}
+                    <div 
+                      className="absolute inset-0 flex items-center justify-center"
+                      style={{ display: product.image ? 'none' : 'flex' }}
+                    >
+                      <Tag size={40} className="text-blue-400 opacity-60" />
+                    </div>
                   </div>
-                  <div className="flex justify-between items-center mt-3">
-                    <span className="text-base font-black text-slate-900">${product.price.toFixed(2)}</span>
-                    {product.isService ? (
-                      <span className="text-xs font-medium text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">Servicio</span>
-                    ) : (
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                        (product.stock ?? 0) <= 0 
-                          ? 'text-rose-700 bg-rose-100' 
-                          : (product.stock ?? 0) <= 5 
-                          ? 'text-amber-700 bg-amber-100' 
-                          : 'text-emerald-700 bg-emerald-100'
-                      }`}>
-                        Stock: {product.stock}
-                      </span>
-                    )}
+
+                  <div className="flex flex-col flex-1 justify-between">
+                    {/* ... El resto de tu código de la tarjeta (nombre, precio, stock) se mantiene exactamente igual ... */}
+                    <div>
+                      <span className="text-xs font-bold text-blue-600 tracking-wider uppercase opacity-80">{product.category}</span>
+                      <h3 className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors line-clamp-2 mt-1 text-sm">{product.name}</h3>
+                    </div>
+                    <div className="flex justify-between items-center mt-3">
+                      <span className="text-base font-black text-slate-900">${product.price.toFixed(2)}</span>
+                      {product.isService ? (
+                        <span className="text-xs font-medium text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">Servicio</span>
+                      ) : (
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                          (product.stock ?? 0) <= 0 
+                            ? 'text-rose-700 bg-rose-100' 
+                            : (product.stock ?? 0) <= 5 
+                              ? 'text-amber-700 bg-amber-100' 
+                              : 'text-emerald-700 bg-emerald-100'
+                        }`}>
+                          Stock: {product.stock}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* ================= BARRA LATERAL DE CONFIGURACIONES COMERCIALES ================= */}
