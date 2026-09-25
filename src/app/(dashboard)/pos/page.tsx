@@ -7,6 +7,14 @@ import ModalPago from '@/components/organisms/pos/ModalPago';
 import { DetalleVenta } from '@/types/ventas.types';
 import { promocionesService } from '@/services/promociones.service';
 
+// 🌐 Configuración base de la API mediante Variable de Entorno
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3008/api/v1';
+
+// Base para la resolución de imágenes dinámicas
+const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_API_URL 
+  ? process.env.NEXT_PUBLIC_API_URL.replace('/api/v1', '') 
+  : 'http://localhost:3007';
+
 // --- Tipos de Datos alineados con el Backend ---
 type Product = {
   id: number;
@@ -34,7 +42,8 @@ export default function PosPage() {
   const [productos, setProductos] = useState<Product[]>([]);
   const [loadingPromos, setLoadingPromos] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
-// 🛡️ CONTROL DE ACCESOS
+  
+  // 🛡️ CONTROL DE ACCESOS
   const esAdmin = true;
   
   // Estado para manejar las notificaciones dinámicas de la app
@@ -48,11 +57,19 @@ export default function PosPage() {
     const id = Date.now();
     setNotificaciones(prev => [...prev, { id, mensaje, tipo }]);
     
-    // Auto-eliminar la notificación después de 4 segundos
     setTimeout(() => {
       setNotificaciones(prev => prev.filter(n => n.id !== id));
     }, 4000);
   }, []);
+
+  // Helper para headers autenticados
+  const getAuthHeaders = () => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+    return {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    };
+  };
 
   // 1. Carga inicial unificada mediante useCallback
   const cargarDatosIniciales = useCallback(async () => {
@@ -61,42 +78,42 @@ export default function PosPage() {
       const promosVigentes = await promocionesService.getVigentes();
       setPromociones(promosVigentes);
 
-      const res = await fetch('http://localhost:3008/api/v1/ventas/productos');
+      // 🔗 URL Dinámica del API Gateway
+      const res = await fetch(`${API_BASE_URL}/ventas/productos`, {
+        headers: getAuthHeaders(),
+      });
       const data = await res.json();
       
-      // 🔍 Abre la consola del navegador para ver la estructura exacta de tus productos
       console.log("📦 Productos crudos del Backend:", data);
 
-          const productosMapeados = data.map((p: any) => {
-          let rutaCompletaImagen = undefined;
+      const productosMapeados = data.map((p: any) => {
+        let rutaCompletaImagen = undefined;
 
-          if (p.imagen && p.imagen.trim() !== "") {
-            if (p.imagen.startsWith('http://') || p.imagen.startsWith('https://')) {
-              rutaCompletaImagen = p.imagen;
-            } else {
-              // Aseguramos que la ruta tenga el slash inicial
-              let cleanPath = p.imagen.startsWith('/') ? p.imagen : `/${p.imagen}`;
-              
-              // 💡 CORRECCIÓN: Si el backend de ventas guardó la ruta sin '/api/v1', se lo anteponemos
-              if (!cleanPath.startsWith('/api/v1')) {
-                cleanPath = `/api/v1${cleanPath}`;
-              }
-              
-              // Apuntar al puerto 3007 de Inventario maestro
-              rutaCompletaImagen = `http://localhost:3007${cleanPath}`; 
+        if (p.imagen && p.imagen.trim() !== "") {
+          if (p.imagen.startsWith('http://') || p.imagen.startsWith('https://')) {
+            rutaCompletaImagen = p.imagen;
+          } else {
+            let cleanPath = p.imagen.startsWith('/') ? p.imagen : `/${p.imagen}`;
+            
+            if (!cleanPath.startsWith('/api/v1')) {
+              cleanPath = `/api/v1${cleanPath}`;
             }
+            
+            // 🔗 Utiliza la variable de entorno base para imágenes
+            rutaCompletaImagen = `${IMAGE_BASE_URL}${cleanPath}`; 
           }
+        }
 
-          return {
-            id: p.id,
-            name: p.nombre,
-            category: p.categoria || 'General',
-            price: Number(p.precioVenta),
-            stock: p.cantidadActual,
-            isService: p.categoria ? p.categoria.toLowerCase().includes('servicio') : false,
-            image: rutaCompletaImagen 
-          };
-        });
+        return {
+          id: p.id,
+          name: p.nombre,
+          category: p.categoria || 'General',
+          price: Number(p.precioVenta),
+          stock: p.cantidadActual,
+          isService: p.categoria ? p.categoria.toLowerCase().includes('servicio') : false,
+          image: rutaCompletaImagen 
+        };
+      });
 
       setProductos(productosMapeados);
     } catch (error) {
@@ -116,7 +133,12 @@ export default function PosPage() {
   const handleSyncCatalog = async () => {
     try {
       setIsSyncing(true);
-      const res = await fetch('http://localhost:3008/api/v1/ventas/sync-productos', { method: 'POST' }); 
+      // 🔗 URL Dinámica
+      const res = await fetch(`${API_BASE_URL}/ventas/sync-productos`, { 
+        method: 'POST',
+        headers: getAuthHeaders(),
+      }); 
+      
       if (!res.ok) throw new Error('Error en la respuesta del servidor');
 
       await cargarDatosIniciales();
@@ -147,7 +169,6 @@ export default function PosPage() {
       const existente = prev.find(item => item.productoId === producto.id);
       
       if (existente) {
-        // Validamos si agregar 1 más supera las existencias físicas
         if (!producto.isService && producto.stock !== null && existente.cantidad >= producto.stock) {
           limiteAlcanzado = true;
           return prev;
@@ -201,17 +222,15 @@ export default function PosPage() {
 
   const handleClearCart = () => setCarrito([]);
 
-  // Cálculos consolidados aplicando el IVA corporativo del 15%
+  // Cálculos consolidados aplicando el IVA corporativo
   const subtotal = carrito.reduce((acc, item) => acc + item.subtotal, 0);
   const impuesto = subtotal * (tasaIva / 100); 
   const total = subtotal + impuesto;
 
-// Cambiar la firma de la función para tipar estrictamente los pagos admitidos
-const handleConfirmarCobro = async (
+  const handleConfirmarCobro = async (
     pagosRegistrados: { metodoPagoId: number; monto: number; montoRecibido?: number; referencia?: string }[], 
     tipoComprobanteSeleccionado: 'TICKET' | 'FACTURA'
   ) => {
-    
     if (!pagosRegistrados || pagosRegistrados.length === 0) {
       lanzarNotificacion('⚠️ Debes especificar al menos un método de pago válido.', 'error');
       return;
@@ -220,15 +239,13 @@ const handleConfirmarCobro = async (
     const pagoEfectivo = pagosRegistrados.find(p => p.metodoPagoId === 1);
     const totalRedondeado = Math.round(total * 100) / 100;
     
-    // 1. Identificar el tipo de pago real para la raíz
-    let metodoPagoRaiz = 2; // Por defecto Tarjeta
+    let metodoPagoRaiz = 2;
     if (pagosRegistrados.length > 1) {
-      metodoPagoRaiz = 3; // 👈 Si hay más de un método, es MIXTO (ID: 3)
+      metodoPagoRaiz = 3;
     } else if (pagoEfectivo) {
-      metodoPagoRaiz = 1; // Si hay solo uno y es efectivo
+      metodoPagoRaiz = 1;
     }
 
-    // 2. Si es efectivo o mixto, usamos el montoRecibido numérico directo enviado por el modal.
     let montoRecibido = pagoEfectivo && pagoEfectivo.montoRecibido !== undefined 
       ? pagoEfectivo.montoRecibido 
       : totalRedondeado;
@@ -252,11 +269,10 @@ const handleConfirmarCobro = async (
     };
 
     try {
-      const response = await fetch("http://localhost:3008/api/v1/ventas", {
+      // 🔗 URL Dinámica del API Gateway
+      const response = await fetch(`${API_BASE_URL}/ventas`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify(payloadVenta),
       });
 
@@ -368,7 +384,6 @@ const handleConfirmarCobro = async (
           {/* Grid del Catálogo */}
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-6">
             {filteredProducts.map(product => {
-              // Estado local por tarjeta o un truco rápido inline con el target de la imagen en onError:
               return (
                 <div 
                   key={product.id}
@@ -382,7 +397,6 @@ const handleConfirmarCobro = async (
                         alt={product.name} 
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                         onError={(e) => {
-                          // 💡 Si la imagen da error 404 en el servidor, la ocultamos y mostramos el contenedor alternativo
                           e.currentTarget.style.display = 'none';
                           const sibling = e.currentTarget.nextElementSibling as HTMLElement;
                           if (sibling) sibling.style.display = 'flex';
@@ -390,7 +404,6 @@ const handleConfirmarCobro = async (
                       />
                     ) : null}
 
-                    {/* Este contenedor actuará como fallback si no hay imagen o si la URL falla */}
                     <div 
                       className="absolute inset-0 flex items-center justify-center"
                       style={{ display: product.image ? 'none' : 'flex' }}
@@ -400,7 +413,6 @@ const handleConfirmarCobro = async (
                   </div>
 
                   <div className="flex flex-col flex-1 justify-between">
-                    {/* ... El resto de tu código de la tarjeta (nombre, precio, stock) se mantiene exactamente igual ... */}
                     <div>
                       <span className="text-xs font-bold text-blue-600 tracking-wider uppercase opacity-80">{product.category}</span>
                       <h3 className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors line-clamp-2 mt-1 text-sm">{product.name}</h3>
@@ -427,30 +439,30 @@ const handleConfirmarCobro = async (
             })}
           </div>
 
-          {/* ================= BARRA LATERAL DE CONFIGURACIONES COMERCIALES ================= */}
-        <div className="space-y-4">
-          
-          {/* Monitor de Campañas */}
-          <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
-            <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider mb-2">Promociones Activas (Backend)</h3>
-            {loadingPromos ? (
-              <div className="flex items-center gap-2 text-xs text-slate-500">
-                <Loader2 className="animate-spin" size={14}/> Sincronizando políticas de precio...
-              </div>
-            ) : promociones.length === 0 ? (
-              <p className="text-xs text-slate-400 italic">No hay reglas promocionales registradas para hoy.</p>
-            ) : (
-              <div className="space-y-2">
-                {promociones.map((p: any) => (
-                  <div key={p.id} className="p-2 bg-purple-50 text-purple-800 rounded-lg text-xs font-medium border border-purple-100">
-                    {p.nombre} — {p.tipoDescuento} ({p.valorDescuento}%)
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          
-          {/* 🚀 CONTROLADOR DINÁMICO FISCAL (IVA OPERATIVO) - PREPARADO PARA ROLES */}
+          {/* BARRA LATERAL DE CONFIGURACIONES COMERCIALES */}
+          <div className="space-y-4">
+            
+            {/* Monitor de Campañas */}
+            <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm">
+              <h3 className="font-bold text-slate-700 text-xs uppercase tracking-wider mb-2">Promociones Activas (Backend)</h3>
+              {loadingPromos ? (
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <Loader2 className="animate-spin" size={14}/> Sincronizando políticas de precio...
+                </div>
+              ) : promociones.length === 0 ? (
+                <p className="text-xs text-slate-400 italic">No hay reglas promocionales registradas para hoy.</p>
+              ) : (
+                <div className="space-y-2">
+                  {promociones.map((p: any) => (
+                    <div key={p.id} className="p-2 bg-purple-50 text-purple-800 rounded-lg text-xs font-medium border border-purple-100">
+                      {p.nombre} — {p.tipoDescuento} ({p.valorDescuento}%)
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            {/* CONTROLADOR DINÁMICO FISCAL (IVA OPERATIVO) */}
             {esAdmin && (
               <div className="bg-white border border-slate-200 p-4 rounded-xl shadow-sm space-y-3 animate-fade-in">
                 <div className="flex justify-between items-center">
@@ -460,7 +472,6 @@ const handleConfirmarCobro = async (
                   </span>
                 </div>
 
-                {/* Selectores rápidos de tasas comunes */}
                 <div className="grid grid-cols-4 gap-1.5">
                   {[0, 5, 15, 19].map((tasa) => (
                     <button
@@ -478,7 +489,6 @@ const handleConfirmarCobro = async (
                   ))}
                 </div>
 
-                {/* Entrada manual fina */}
                 <div className="relative">
                   <input
                     type="number"
@@ -496,7 +506,7 @@ const handleConfirmarCobro = async (
                 </div>
               </div>
             )}
-        </div>
+          </div>
 
         </div>
       </section>

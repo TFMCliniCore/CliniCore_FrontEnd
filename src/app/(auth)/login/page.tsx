@@ -53,11 +53,12 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3010/api/v1";
     try {
-      const res = await fetch("http://localhost:3010/api/v1/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+      const res = await fetch(`${baseUrl}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
       });
 
       // Si el servidor responde pero con un estado de error (ej: 500, 404) sin JSON válido
@@ -109,14 +110,13 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3002/api/v1"}/auth/forgot-password`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }), // Envía el correo que ya está en el input[cite: 16]
-        },
-      );
+      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002/api/v1";
+
+      const res = await fetch(`${baseUrl}/auth/forgot-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
 
       if (!res.ok)
         throw new Error("No se pudo enviar el correo de recuperación.");
