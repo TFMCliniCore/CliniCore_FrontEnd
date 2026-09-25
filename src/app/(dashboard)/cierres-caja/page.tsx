@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Lock, Unlock, CreditCard, History, X, DollarSign, Send, Eye } from 'lucide-react';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3008/api/v1';
+
 // 1. TIPADO ROBUSTO Y COMPLETO
 type VentaCaja = {
   id: number;
@@ -24,7 +26,7 @@ type CierreCaja = {
   totalCalculado: string | number;   
   totalReal: string | number | null; 
   efectivoReal?: string | number | null;      
-  tarjetaReal?: string | number | null;       
+  tarjetaReal?: string | number | null;        
   transferenciaReal?: string | number | null; 
   diferencia: string | number | null;
   observaciones: string | null;
@@ -62,8 +64,8 @@ export default function CierresCajaPage() {
   const cargarDatosCaja = async () => {
     try {
       const [resActiva, resHistorial] = await Promise.all([
-        fetch('http://localhost:3008/api/v1/cierres-caja/activa'),
-        fetch('http://localhost:3008/api/v1/cierres-caja?limite=10&estado=CERRADA')
+        fetch(`${API_URL}/cierres-caja/activa`),
+        fetch(`${API_URL}/cierres-caja?limite=10&estado=CERRADA`)
       ]);
 
       if (resActiva.ok) {
@@ -83,7 +85,7 @@ export default function CierresCajaPage() {
     }
   };
 
-  // 3. 🔥 CÁLCULOS DEREVADOS (ESTADO DERIVADO - AQUÍ SE RESUELVE TU BUG)
+  // 3. 🔥 CÁLCULOS DERIVADOS
   const isCajaAbierta = cajaActiva !== null;
   const montoInicialNum = Number(cajaActiva?.montoInicial || 0);
 
@@ -99,7 +101,7 @@ export default function CierresCajaPage() {
   // 4. ACCIONES DE FLUJO
   const handleAbrirCaja = async () => {
     try {
-      const response = await fetch('http://localhost:3008/api/v1/cierres-caja', {
+      const response = await fetch(`${API_URL}/cierres-caja`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ montoApertura: Number(montoBase), usuarioId: 1, sucursalId: 1 })
@@ -131,7 +133,7 @@ export default function CierresCajaPage() {
     if (!cajaActiva) return;
 
     try {
-      const response = await fetch(`http://localhost:3008/api/v1/cierres-caja/${cajaActiva.id}/cerrar`, {
+      const response = await fetch(`${API_URL}/cierres-caja/${cajaActiva.id}/cerrar`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -2,7 +2,7 @@
 
 import React, { useEffect } from "react";
 import { useForm, useWatch } from "react-hook-form";
-import Image from "next/image"; // Importante para la ilustración de fondo
+import Image from "next/image";
 import { 
   Package, Tag, DollarSign, Database, 
   Plus, Save, X, Calendar 
@@ -30,6 +30,8 @@ type ProductoFormData = {
   precioVenta: number;
 };
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002/api/v1";
+
 export default function CrearProductoForm() {
   const { 
     register, 
@@ -55,11 +57,11 @@ export default function CrearProductoForm() {
     setValue("precioMasImpuestos", parseFloat(total.toFixed(2)));
   }, [precioCosto, impuesto, setValue]);
 
-const onSubmit = async (data: ProductoFormData) => {
+  const onSubmit = async (data: ProductoFormData) => {
     console.log("Enviando al backend corregido:", data);
 
     try {
-      const response = await fetch("http://localhost:3002/api/v1/productos", {
+      const response = await fetch(`${API_BASE_URL}/productos`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -87,14 +89,14 @@ const onSubmit = async (data: ProductoFormData) => {
 
       // 🚀 Disparo inmediato para el stock inicial (Try-Catch Interno)
       try {
-        const stockResponse = await fetch("http://localhost:3002/api/v1/movimientos-stock", {
+        const stockResponse = await fetch(`${API_BASE_URL}/movimientos-stock`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
             productoId: productoCreado.id, 
-            cantidad: 100,                  
+            cantidad: 100,                   
             tipo: "ENTRADA", 
             motivo: "Stock inicial de prueba"
           }),
@@ -113,7 +115,7 @@ const onSubmit = async (data: ProductoFormData) => {
         alert("Producto creado, pero hubo un fallo de red al meter el stock.");
       }
 
-    // 🔑 AQUÍ ESTABA EL DETALLE: Cerramos el Try principal y atrapamos su Catch
+    // 🔑 Cerramos el Try principal y atrapamos su Catch
     } catch (error) {
       console.error("❌ Error de red al conectar con el Gateway:", error);
       alert("Error de conexión con el API Gateway.");
@@ -136,8 +138,8 @@ const onSubmit = async (data: ProductoFormData) => {
       </div>
 
       {/* TEXTURAS ADICIONALES (Huellas/Paw prints similares a Home.png) */}
-      <div className="absolute top-0 pointer-events-none z-0  opacity-60 select-none" >
-      <Image 
+      <div className="absolute top-0 pointer-events-none z-0 opacity-60 select-none">
+        <Image 
           src="/images/paws-pattern.png"
           alt="Background Illustration"
           width={1100}
@@ -145,7 +147,6 @@ const onSubmit = async (data: ProductoFormData) => {
           className="object-contain"
         />
       </div>
-
 
       {/* CONTENIDO DEL FORMULARIO (Z-10 para estar sobre el fondo) */}
       <div className="relative z-10 w-full max-w-[1600px] mx-auto px-4 md:px-8 pt-300px">
