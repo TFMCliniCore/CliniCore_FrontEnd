@@ -32,6 +32,10 @@ const MODULES = [
   "Reportes",
 ];
 
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://api-gateway-5pb1.onrender.com/api/v1";
+
 export default function LoginPage() {
   const router = useRouter();
 
@@ -53,22 +57,24 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3010/api/v1";
     try {
-      const res = await fetch(`${baseUrl}/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      const res = await fetch(`${API_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
       });
 
-      // Si el servidor responde pero con un estado de error (ej: 500, 404) sin JSON válido
       if (!res.ok) {
         const errorText = await res.text();
         try {
           const errorJson = JSON.parse(errorText);
-          throw new Error(errorJson.message || `Error del servidor (${res.status})`);
+          throw new Error(
+            errorJson.message || `Error del servidor (${res.status})`
+          );
         } catch {
-          throw new Error(`El servidor respondió con error ${res.status} pero sin datos.`);
+          throw new Error(
+            `El servidor respondió con error ${res.status} sin un cuerpo JSON válido.`
+          );
         }
       }
 
@@ -80,20 +86,26 @@ export default function LoginPage() {
         localStorage.setItem("user", JSON.stringify(data.usuario));
 
         setSuccess(true);
-        setTimeout(() => { window.location.href = '/'; }, 1000);
+        setTimeout(() => {
+          window.location.href = "/";
+        }, 1000);
       } else {
         throw new Error(data.message || "El backend no envió un token.");
       }
     } catch (err: any) {
       console.error("Detalles del error atrapado:", err);
-      
-      // Captura el ERR_EMPTY_RESPONSE o fallos de red donde no hay respuesta
-      if (err instanceof TypeError && err.message.includes("fetch")) {
-        setError("No se pudo conectar con el servidor. El backend en el puerto 3010 no responde o rechazó la conexión.");
-      } else if (err.message === "Failed to fetch") {
-        setError("Error de red: El servidor está apagado o hay un problema de CORS.");
+
+      if (
+        (err instanceof TypeError && err.message.toLowerCase().includes("fetch")) ||
+        err.message === "Failed to fetch"
+      ) {
+        setError(
+          `Fallo de conexión: No se pudo contactar con el API Gateway (${API_URL}). El servidor está fuera de línea, inalcanzable o bloqueado por CORS.`
+        );
       } else {
-        setError(err.message || "Ocurrió un error inesperado al intentar ingresar.");
+        setError(
+          err.message || "Ocurrió un error inesperado al intentar ingresar."
+        );
       }
     } finally {
       setLoading(false);
@@ -110,9 +122,7 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002/api/v1";
-
-      const res = await fetch(`${baseUrl}/auth/forgot-password`, {
+      const res = await fetch(`${API_URL}/auth/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
@@ -121,7 +131,6 @@ export default function LoginPage() {
       if (!res.ok)
         throw new Error("No se pudo enviar el correo de recuperación.");
 
-      // Mostramos el éxito usando el mismo campo de error para no alterar la vista
       setError("Si el correo existe, se ha enviado un enlace de recuperación.");
     } catch (err: any) {
       setError(err.message);
@@ -345,7 +354,7 @@ export default function LoginPage() {
                 </label>
                 <button
                   type="button"
-                  onClick={handleForgotPassword} // 🔥 Conexión de la lógica
+                  onClick={handleForgotPassword}
                   className="text-sm text-teal-600 hover:text-teal-700 font-semibold transition-colors"
                 >
                   ¿Olvidaste tu contraseña?
@@ -399,7 +408,6 @@ export default function LoginPage() {
                 border border-gray-200 text-sm font-medium text-gray-700
                 hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
             >
-              {/* Google G */}
               <svg width="18" height="18" viewBox="0 0 24 24">
                 <path
                   fill="#4285F4"
