@@ -32,6 +32,10 @@ const MODULES = [
   "Reportes",
 ];
 
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ||
+  "https://api-gateway-5pb1.onrender.com/api/v1";
+
 export default function LoginPage() {
   const router = useRouter();
 
@@ -53,47 +57,74 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
-    const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3010/api/v1";
+    
+
     try {
-      const res = await fetch(`${baseUrl}/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      const res = await fetch(`${API_URL}/usuarios/login`, { // 👈 Ruta apuntando al controlador del Core/Gateway
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          email, 
+          contrasena: password // 👈 1. Clave exacta 'contrasena' sin "ñ" ni "password"
+        }),
       });
 
-      // Si el servidor responde pero con un estado de error (ej: 500, 404) sin JSON válido
       if (!res.ok) {
         const errorText = await res.text();
         try {
           const errorJson = JSON.parse(errorText);
-          throw new Error(errorJson.message || `Error del servidor (${res.status})`);
-        } catch {
-          throw new Error(`El servidor respondió con error ${res.status} pero sin datos.`);
+          // 👈 2. NestJS puede enviar 'message' como string o como Array de errores de validación
+          const errorMessage = Array.isArray(errorJson.message)
+            ? errorJson.message.join(", ")
+            : errorJson.message;
+
+          throw new Error(
+            errorMessage || `Error del servidor (${res.status})`
+          );
+        } catch (parseError) {
+          if (parseError instanceof Error && parseError.message !== "Unexpected token...") {
+            throw parseError;
+          }
+          throw new Error(
+            `El servidor respondió con error ${res.status} sin un cuerpo JSON válido.`
+          );
         }
       }
 
       const data = await res.json();
-      console.log("CONTENIDO REAL DEL BACKEND:", data);
+      console.log("Respuesta de inicio de sesión:", data);
 
-      if (data.access_token) {
-        localStorage.setItem("token", data.access_token);
-        localStorage.setItem("user", JSON.stringify(data.usuario));
+      // 👈 3. Si el Gateway devuelve { access_token, usuario }, los usará.
+      // Si el Core responde directo, 'data' será el usuario y guardará 'data.id' o un flag de sesión.
+      const token = data.access_token || data.id;
+      const usuario = data.usuario || data;
 
-        setSuccess(true);
-        setTimeout(() => { window.location.href = '/'; }, 1000);
-      } else {
-        throw new Error(data.message || "El backend no envió un token.");
-      }
+      if (token && usuario) {
+      localStorage.setItem("token", typeof token === "string" ? token : JSON.stringify(token));
+      localStorage.setItem("user", JSON.stringify(usuario));
+
+      // 👇 AGREGA ESTA LÍNEA para guardar la cookie que lee Next.js Middleware:
+      document.cookie = `token=${typeof token === "string" ? token : JSON.stringify(token)}; path=/; max-age=86400; SameSite=Lax`;
+
+      setSuccess(true);
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 1000);
+    }
     } catch (err: any) {
       console.error("Detalles del error atrapado:", err);
-      
-      // Captura el ERR_EMPTY_RESPONSE o fallos de red donde no hay respuesta
-      if (err instanceof TypeError && err.message.includes("fetch")) {
-        setError("No se pudo conectar con el servidor. El backend en el puerto 3010 no responde o rechazó la conexión.");
-      } else if (err.message === "Failed to fetch") {
-        setError("Error de red: El servidor está apagado o hay un problema de CORS.");
+
+      if (
+        (err instanceof TypeError && err.message.toLowerCase().includes("fetch")) ||
+        err.message === "Failed to fetch"
+      ) {
+        setError(
+          `Fallo de conexión: No se pudo contactar con la API (${API_URL}). El servidor está fuera de línea o bloqueado por CORS.`
+        );
       } else {
-        setError(err.message || "Ocurrió un error inesperado al intentar ingresar.");
+        setError(
+          err.message || "Ocurrió un error inesperado al intentar ingresar."
+        );
       }
     } finally {
       setLoading(false);
@@ -110,9 +141,7 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3002/api/v1";
-
-      const res = await fetch(`${baseUrl}/auth/forgot-password`, {
+      const res = await fetch(`${API_URL}/auth/forgot-password`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
@@ -121,13 +150,13 @@ export default function LoginPage() {
       if (!res.ok)
         throw new Error("No se pudo enviar el correo de recuperación.");
 
-      // Mostramos el éxito usando el mismo campo de error para no alterar la vista
       setError("Si el correo existe, se ha enviado un enlace de recuperación.");
     } catch (err: any) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
+    
   };
 
   return (
@@ -138,14 +167,12 @@ export default function LoginPage() {
         bg-gradient-to-b from-[#0e314d] via-[#0a6b55] to-[#105174]
         relative overflow-hidden"
       >
-        {/* Decorative bubbles */}
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute -top-20 -right-20 w-72 h-72 bg-cyan-400/10 rounded-full blur-[80px]" />
           <div className="absolute bottom-0 -left-10 w-80 h-80 bg-emerald-500/15 rounded-full blur-[90px]" />
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-teal-600/5 rounded-full blur-[120px]" />
         </div>
 
-        {/* Dot grid */}
         <div
           className="absolute inset-0 opacity-[0.06]"
           style={{
@@ -155,7 +182,6 @@ export default function LoginPage() {
           }}
         />
 
-        {/* Logo */}
         <div className="relative z-10 flex items-center gap-3">
           <div className="w-11 h-11 bg-white/15 backdrop-blur-xl rounded-2xl flex items-center justify-center border border-white/20 shadow-lg">
             <Stethoscope className="text-cyan-300" size={22} />
@@ -170,7 +196,6 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Hero text */}
         <div className="relative z-10">
           <h1 className="text-4xl font-black text-white leading-tight mb-4">
             Gestión clínica
@@ -199,7 +224,6 @@ export default function LoginPage() {
             ))}
           </div>
 
-          {/* Module tags */}
           <div className="flex flex-wrap gap-2">
             {MODULES.map((m) => (
               <span
@@ -212,7 +236,6 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Footer */}
         <p className="relative z-10 text-white/25 text-xs">
           © 2026 Clinicore · Todos los derechos reservados
         </p>
@@ -221,7 +244,6 @@ export default function LoginPage() {
       {/* ── Right panel: form ── */}
       <main className="flex-1 bg-gray-50 flex items-center justify-center p-6">
         <div className="w-full max-w-md">
-          {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-3 mb-8 justify-center">
             <div
               className="w-10 h-10 rounded-xl flex items-center justify-center"
@@ -236,7 +258,6 @@ export default function LoginPage() {
             </span>
           </div>
 
-          {/* Card */}
           <div className="bg-white rounded-3xl shadow-xl shadow-gray-200/60 border border-gray-100 p-8 md:p-10">
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-1">
@@ -247,7 +268,6 @@ export default function LoginPage() {
               </p>
             </div>
 
-            {/* Error alert */}
             {error && (
               <div className="flex items-start gap-3 p-4 mb-6 bg-red-50 border border-red-200 rounded-2xl text-red-700 text-sm">
                 <AlertCircle size={17} className="flex-shrink-0 mt-0.5" />
@@ -255,7 +275,6 @@ export default function LoginPage() {
               </div>
             )}
 
-            {/* Success */}
             {success && (
               <div className="flex items-center gap-3 p-4 mb-6 bg-green-50 border border-green-200 rounded-2xl text-green-700 text-sm">
                 <CheckCircle2 size={17} className="flex-shrink-0" />
@@ -264,7 +283,6 @@ export default function LoginPage() {
             )}
 
             <form onSubmit={handleLogin} className="space-y-5" noValidate>
-              {/* Email */}
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
                   Correo electrónico
@@ -299,7 +317,6 @@ export default function LoginPage() {
                 )}
               </div>
 
-              {/* Password */}
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
                   Contraseña
@@ -332,7 +349,6 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              {/* Remember + forgot */}
               <div className="flex items-center justify-between pt-1">
                 <label className="flex items-center gap-2.5 cursor-pointer group">
                   <input
@@ -345,14 +361,13 @@ export default function LoginPage() {
                 </label>
                 <button
                   type="button"
-                  onClick={handleForgotPassword} // 🔥 Conexión de la lógica
+                  onClick={handleForgotPassword}
                   className="text-sm text-teal-600 hover:text-teal-700 font-semibold transition-colors"
                 >
                   ¿Olvidaste tu contraseña?
                 </button>
               </div>
 
-              {/* Submit */}
               <button
                 type="submit"
                 disabled={loading || !emailValid || !pwValid || success}
@@ -384,7 +399,6 @@ export default function LoginPage() {
               </button>
             </form>
 
-            {/* Divider + SSO */}
             <div className="flex items-center gap-3 my-6">
               <div className="flex-1 h-px bg-gray-100" />
               <span className="text-xs text-gray-400 font-medium">
@@ -399,7 +413,6 @@ export default function LoginPage() {
                 border border-gray-200 text-sm font-medium text-gray-700
                 hover:bg-gray-50 hover:border-gray-300 transition-all duration-200"
             >
-              {/* Google G */}
               <svg width="18" height="18" viewBox="0 0 24 24">
                 <path
                   fill="#4285F4"
