@@ -57,15 +57,13 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
-    
-
     try {
-      const res = await fetch(`${API_URL}/usuarios/login`, { // 👈 Ruta apuntando al controlador del Core/Gateway
+      const res = await fetch(`${API_URL}/usuarios/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           email, 
-          contrasena: password // 👈 1. Clave exacta 'contrasena' sin "ñ" ni "password"
+          contrasena: password 
         }),
       });
 
@@ -73,7 +71,6 @@ export default function LoginPage() {
         const errorText = await res.text();
         try {
           const errorJson = JSON.parse(errorText);
-          // 👈 2. NestJS puede enviar 'message' como string o como Array de errores de validación
           const errorMessage = Array.isArray(errorJson.message)
             ? errorJson.message.join(", ")
             : errorJson.message;
@@ -94,23 +91,23 @@ export default function LoginPage() {
       const data = await res.json();
       console.log("Respuesta de inicio de sesión:", data);
 
-      // 👈 3. Si el Gateway devuelve { access_token, usuario }, los usará.
-      // Si el Core responde directo, 'data' será el usuario y guardará 'data.id' o un flag de sesión.
       const token = data.access_token || data.id;
       const usuario = data.usuario || data;
 
       if (token && usuario) {
-      localStorage.setItem("token", typeof token === "string" ? token : JSON.stringify(token));
-      localStorage.setItem("user", JSON.stringify(usuario));
+        localStorage.setItem("token", typeof token === "string" ? token : JSON.stringify(token));
+        localStorage.setItem("user", JSON.stringify(usuario));
 
-      // 👇 AGREGA ESTA LÍNEA para guardar la cookie que lee Next.js Middleware:
-      document.cookie = `token=${typeof token === "string" ? token : JSON.stringify(token)}; path=/; max-age=86400; SameSite=Lax`;
+        // Guarda la cookie requerida por el Middleware de Next.js
+        document.cookie = `token=${typeof token === "string" ? token : JSON.stringify(token)}; path=/; max-age=86400; SameSite=Lax`;
 
-      setSuccess(true);
-      setTimeout(() => {
-        window.location.href = "/";
-      }, 1000);
-    }
+        setSuccess(true);
+        setTimeout(() => {
+          window.location.href = "/";
+        }, 1000);
+      } else {
+        throw new Error(data.message || "El backend no devolvió una sesión válida.");
+      }
     } catch (err: any) {
       console.error("Detalles del error atrapado:", err);
 
@@ -156,7 +153,6 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
-    
   };
 
   return (
