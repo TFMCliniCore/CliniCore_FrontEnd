@@ -58,7 +58,8 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const res = await fetch(`${API_URL}/usuarios/login`, {
+      // 🎯 1. Conexión hacia el endpoint de autenticación del API Gateway
+      const res = await fetch(`${API_URL}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
@@ -75,31 +76,28 @@ export default function LoginPage() {
             ? errorJson.message.join(", ")
             : errorJson.message;
 
-          throw new Error(
-            errorMessage || `Error del servidor (${res.status})`
-          );
+          throw new Error(errorMessage || `Error del servidor (${res.status})`);
         } catch (parseError) {
           if (parseError instanceof Error && parseError.message !== "Unexpected token...") {
             throw parseError;
           }
-          throw new Error(
-            `El servidor respondió con error ${res.status} sin un cuerpo JSON válido.`
-          );
+          throw new Error(`Error ${res.status}: Credenciales incorrectas.`);
         }
       }
 
       const data = await res.json();
       console.log("Respuesta de inicio de sesión:", data);
 
-      const token = data.access_token || data.id;
-      const usuario = data.usuario || data;
+      // 🎯 2. Obtención estricta del token JWT y el usuario devueltos por el Gateway
+      const token = data.access_token;
+      const usuario = data.usuario;
 
       if (token && usuario) {
-        localStorage.setItem("token", typeof token === "string" ? token : JSON.stringify(token));
+        localStorage.setItem("token", token);
         localStorage.setItem("user", JSON.stringify(usuario));
 
-        // Guarda la cookie requerida por el Middleware de Next.js
-        document.cookie = `token=${typeof token === "string" ? token : JSON.stringify(token)}; path=/; max-age=86400; SameSite=Lax`;
+        // 🎯 3. Guardado del token JWT real en la Cookie que lee middleware.ts
+        document.cookie = `token=${token}; path=/; max-age=86400; SameSite=Lax`;
 
         setSuccess(true);
         setTimeout(() => {
