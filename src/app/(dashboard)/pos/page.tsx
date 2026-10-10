@@ -64,29 +64,44 @@ export default function PosPage() {
 
   // Helper para headers autenticados
   const getAuthHeaders = () => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-    return {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      const token = typeof window !== 'undefined' 
+        ? (localStorage.getItem('token') || localStorage.getItem('access_token'))
+        : null;
+      return {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      };
     };
-  };
 
   // 1. Carga inicial unificada mediante useCallback
   const cargarDatosIniciales = useCallback(async () => {
     setLoadingPromos(true);
+
+    // A. Cargar Promociones aisladamente
     try {
       const promosVigentes = await promocionesService.getVigentes();
-      setPromociones(promosVigentes);
+      setPromociones(Array.isArray(promosVigentes) ? promosVigentes : []);
+    } catch (error) {
+      console.warn("⚠️ Promociones no disponibles (404), continuando con catálogo vacio de promociones:", error);
+      setPromociones([]);
+    } finally {
+      setLoadingPromos(false);
+    }
 
-      // 🔗 URL Dinámica del API Gateway
+    // B. Cargar Productos (se ejecuta SIEMPRE aunque fallen las promociones)
+    try {
       const res = await fetch(`${API_BASE_URL}/ventas/productos`, {
         headers: getAuthHeaders(),
       });
-      const data = await res.json();
-      
-      console.log("📦 Productos crudos del Backend:", data);
 
-      const productosMapeados = data.map((p: any) => {
+      if (!res.ok) {
+        throw new Error(`Error en el servidor al obtener productos (${res.status})`);
+      }
+
+      const data = await res.json();
+      console.log("📦 Productos recibidos del Backend:", data);
+
+      const productosMapeados = (Array.isArray(data) ? data : []).map((p: any) => {
         let rutaCompletaImagen = undefined;
 
         if (p.imagen && p.imagen.trim() !== "") {
@@ -94,12 +109,9 @@ export default function PosPage() {
             rutaCompletaImagen = p.imagen;
           } else {
             let cleanPath = p.imagen.startsWith('/') ? p.imagen : `/${p.imagen}`;
-            
             if (!cleanPath.startsWith('/api/v1')) {
               cleanPath = `/api/v1${cleanPath}`;
             }
-            
-            // 🔗 Utiliza la variable de entorno base para imágenes
             rutaCompletaImagen = `${IMAGE_BASE_URL}${cleanPath}`; 
           }
         }
@@ -108,8 +120,8 @@ export default function PosPage() {
           id: p.id,
           name: p.nombre,
           category: p.categoria || 'General',
-          price: Number(p.precioVenta),
-          stock: p.cantidadActual,
+          price: Number(p.precioVenta || p.precio || 0),
+          stock: p.cantidadActual ?? p.stock ?? 0,
           isService: p.categoria ? p.categoria.toLowerCase().includes('servicio') : false,
           image: rutaCompletaImagen 
         };
@@ -117,12 +129,11 @@ export default function PosPage() {
 
       setProductos(productosMapeados);
     } catch (error) {
-      lanzarNotificacion("Error crítico al cargar el catálogo de productos.", "error");
-      console.error(error);
-    } finally {
-      setLoadingPromos(false);
+      console.error("Error al cargar productos:", error);
+      lanzarNotificacion("Error al obtener la lista de productos del servidor.", "error");
     }
   }, [lanzarNotificacion]);
+
 
   // 2. Un único useEffect controlador de ciclo de vida
   useEffect(() => {
@@ -133,13 +144,14 @@ export default function PosPage() {
   const handleSyncCatalog = async () => {
     try {
       setIsSyncing(true);
-      // 🔗 URL Dinámica
       const res = await fetch(`${API_BASE_URL}/ventas/sync-productos`, { 
         method: 'POST',
         headers: getAuthHeaders(),
       }); 
       
-      if (!res.ok) throw new Error('Error en la respuesta del servidor');
+      if (!res.ok) {
+        throw new Error(`Error ${res.status} al sincronizar inventario`);
+      }
 
       await cargarDatosIniciales();
       lanzarNotificacion('Catálogo sincronizado con éxito desde el inventario maestro.', 'success');
