@@ -41,6 +41,11 @@ import ProductoDetalleModal, {
 
 const PAGE_SIZE = 5;
 
+// Base para la resolución segura de imágenes dinámicas
+const IMAGE_BASE_URL = process.env.NEXT_PUBLIC_API_URL 
+  ? process.env.NEXT_PUBLIC_API_URL.replace('/api/v1', '') 
+  : 'http://localhost:10000';
+
 type Estado =
   | "Disponible"
   | "Bajo stock"
@@ -83,6 +88,20 @@ function mapApiToView(p: ProductoApi): Producto {
       ? `Hace ${mins} min`
       : `Hace ${Math.floor(mins / 60)}h`;
 
+  // 🖼️ Lógica robusta para resolver la ruta de la imagen
+  let rutaCompletaImagen = IMAGEN_DEFAULT;
+  if (p.imagen && p.imagen.trim() !== "") {
+    if (p.imagen.startsWith('http://') || p.imagen.startsWith('https://')) {
+      rutaCompletaImagen = p.imagen;
+    } else {
+      let cleanPath = p.imagen.startsWith('/') ? p.imagen : `/${p.imagen}`;
+      if (!cleanPath.startsWith('/api/v1')) {
+        cleanPath = `/api/v1${cleanPath}`;
+      }
+      rutaCompletaImagen = `${IMAGE_BASE_URL}${cleanPath}`;
+    }
+  }
+
   return {
     id: p.id,
     nombre: p.nombre,
@@ -93,7 +112,7 @@ function mapApiToView(p: ProductoApi): Producto {
     proveedor:
       p.fabricante ?? p.marca ?? "Sin proveedor",
     estado,
-    imagen: resolveImageUrl(p.imagen, p.updatedAt) ?? IMAGEN_DEFAULT,
+    imagen: rutaCompletaImagen,
     actualizado,
     vencimiento: p.fechaVencimiento
       ? p.fechaVencimiento.substring(0, 10)

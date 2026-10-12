@@ -8,11 +8,9 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Package,
-  Bone,
   Store,
   Users,
   Dog,
-  ShoppingCart,
   BarChart3,
   FileText,
   ChevronRight,
@@ -151,20 +149,6 @@ const navItems = [
   },
 
   {
-    icon: Store,
-    label: "POS / Ventas",
-    href: "/pos",
-    submenu: true,
-    subItems: [
-      {
-        label: "Terminal POS",
-        href: "/pos",
-        icon: ShoppingCart,
-      },
-    ],
-  },
-
-  {
     icon: Wallet,
     label: "Caja",
     href: "/caja",
@@ -270,7 +254,7 @@ const navItems = [
     ],
   },
 
-  // 🛒 SECCIÓN PUNTO DE VENTA ENRIQUECIDA CON TUS NUEVAS RUTAS
+  // 🛒 ÚNICO PUNTO DE VENTA (COMPLETO CON SUBRUTAS)
   {
     icon: Store,
     label: "Punto de Venta",

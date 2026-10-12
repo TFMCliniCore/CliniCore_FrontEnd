@@ -2,6 +2,10 @@
 
 import { useState, useEffect } from 'react';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3008/api/v1';
+// Extrae el host base eliminando la ruta del API para archivos estáticos como PDFs
+const BASE_URL = API_URL.replace(/\/api\/v1\/?$/, '');
+
 // Mapeo inverso para mostrar los nombres de los métodos de pago según su ID
 const ID_METODO_PAGO_MAP: Record<number, string> = {
   1: 'EFECTIVO',
@@ -65,7 +69,7 @@ export default function HistorialVentasPage() {
   useEffect(() => {
     const fetchVentas = async () => {
       try {
-        const respuesta = await fetch('http://localhost:3008/api/v1/ventas');
+        const respuesta = await fetch(`${API_URL}/ventas`);
         if (!respuesta.ok) throw new Error('Error al obtener el historial');
         
         const datos = await respuesta.json();
@@ -114,8 +118,7 @@ export default function HistorialVentasPage() {
       return;
     }
 
-    const BACKEND_URL = 'http://localhost:3008'; 
-    let urlCompleta = urlPdf.startsWith('http') ? urlPdf : `${BACKEND_URL}${urlPdf}`;
+    let urlCompleta = urlPdf.startsWith('http') ? urlPdf : `${BASE_URL}${urlPdf}`;
 
     const conector = urlCompleta.includes('?') ? '&' : '?';
     urlCompleta = `${urlCompleta}${conector}v=${new Date().getTime()}`;
@@ -163,7 +166,7 @@ export default function HistorialVentasPage() {
 
     setAnulandoId(id);
     try {
-      const respuesta = await fetch(`http://localhost:3008/api/v1/ventas/${id}/anular`, {
+      const respuesta = await fetch(`${API_URL}/ventas/${id}/anular`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ motivoAnulacion: motivoAnulacion.trim() })
