@@ -54,29 +54,46 @@ export default function LoginPage() {
     setError("");
 
     try {
-      const res = await fetch("http://localhost:3002/api/v1/auth/login", {
+      const res = await fetch("http://localhost:3010/api/v1/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
 
+      // Si el servidor responde pero con un estado de error (ej: 500, 404) sin JSON válido
+      if (!res.ok) {
+        const errorText = await res.text();
+        try {
+          const errorJson = JSON.parse(errorText);
+          throw new Error(errorJson.message || `Error del servidor (${res.status})`);
+        } catch {
+          throw new Error(`El servidor respondió con error ${res.status} pero sin datos.`);
+        }
+      }
+
       const data = await res.json();
       console.log("CONTENIDO REAL DEL BACKEND:", data);
 
-      if (res.ok && data.access_token) {
-        // Guardamos el access_token en el localStorage con la llave 'token'
+      if (data.access_token) {
         localStorage.setItem("token", data.access_token);
         localStorage.setItem("user", JSON.stringify(data.usuario));
 
         setSuccess(true);
-        // Redirigir al dashboard
         setTimeout(() => { window.location.href = '/'; }, 1000);
       } else {
-        // Si el backend no envió access_token, mostramos el error
         throw new Error(data.message || "El backend no envió un token.");
       }
     } catch (err: any) {
-      setError(err.message);
+      console.error("Detalles del error atrapado:", err);
+      
+      // Captura el ERR_EMPTY_RESPONSE o fallos de red donde no hay respuesta
+      if (err instanceof TypeError && err.message.includes("fetch")) {
+        setError("No se pudo conectar con el servidor. El backend en el puerto 3010 no responde o rechazó la conexión.");
+      } else if (err.message === "Failed to fetch") {
+        setError("Error de red: El servidor está apagado o hay un problema de CORS.");
+      } else {
+        setError(err.message || "Ocurrió un error inesperado al intentar ingresar.");
+      }
     } finally {
       setLoading(false);
     }
