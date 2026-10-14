@@ -371,6 +371,7 @@ export default function Sidebar() {
               alt="Logo"
               width={140}
               height={140}
+              priority
               className="object-contain scale-150"
             />
           </div>

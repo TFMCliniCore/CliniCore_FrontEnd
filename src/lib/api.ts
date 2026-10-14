@@ -91,7 +91,6 @@ export const citasApi = {
   eliminar: (id: number) =>
     apiFetch<void>(`/citas/${id}`, { method: "DELETE" }),
 };
-
 export const pacientesApi = {
   listar: () => apiFetch<any[]>("/pacientes"),
   obtener: (id: number | string) => apiFetch<any>(`/pacientes/${id}`),
@@ -369,4 +368,115 @@ export const productosApi = {
     }
     return res.json() as Promise<Producto>;
   },
+};
+
+
+export type EstadoVideoconsulta =
+  | "PENDIENTE"
+  | "PROGRAMADA"
+  | "EN_CURSO"
+  | "COMPLETADA"
+  | "FINALIZADA"
+  | "CANCELADA";
+
+export interface Videoconsulta {
+  id: string;
+  fecha: string;
+  duracionMinutos: number;
+  motivo: string;
+  estado: EstadoVideoconsulta;
+  eliminado: boolean;
+  enlaceMeet: string | null;
+  meetEventId: string | null;
+  pacienteId: string;
+  clienteId: string;
+  doctorId: string;
+  especialidadId: string | null;
+  usuarioId: string;
+  createdAt: string;
+  updatedAt: string;
+
+  paciente?: {
+    id: number;
+    nombre: string;
+    especie?: string;
+    raza?: string;
+    cliente?: {
+      nombres?: string;
+      email?: string;
+    };
+  };
+
+  usuario?: {
+    id: number;
+    nombres: string;
+    email?: string;
+    cargo?: string;
+  };
+}
+
+export interface SesionVideoconsulta {
+  id: string;
+  videoconsultaId: string | null;
+  estado: "ACTIVA" | "FINALIZADA" | "INTERRUMPIDA";
+  eliminado: boolean;
+}
+
+export const telemedicinaApi = {
+  listar: () =>
+    apiFetch<Videoconsulta[]>("/videoconsultas"),
+
+  listarSesiones: () => apiFetch<SesionVideoconsulta[]>("/sesiones"),
+
+  obtener: (id: string) =>
+    apiFetch<Videoconsulta>(`/videoconsultas/${id}`),
+
+  crear: (datos: {
+    fecha: string;
+    duracionMinutos?: number;
+    motivo: string;
+    pacienteId: string;
+    usuarioId?: string;
+    crearMeet?: boolean;
+  }) =>
+    apiFetch<Videoconsulta>("/videoconsultas", {
+      method: "POST",
+      body: JSON.stringify(datos),
+    }),
+
+  actualizar: (
+    id: string,
+    datos: Partial<Videoconsulta>,
+  ) =>
+    apiFetch<Videoconsulta>(`/videoconsultas/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(datos),
+    }),
+
+  eliminar: (id: string) =>
+    apiFetch<void>(`/videoconsultas/${id}`, {
+      method: "DELETE",
+    }),
+
+  iniciarSesion: (videoconsultaId: string) =>
+    apiFetch<{
+      sesion: { id: string };
+      enlaceMeet?: string;
+      meetEventId?: string;
+    }>("/meet/start-session", {
+      method: "POST",
+      body: JSON.stringify({ videoconsultaId }),
+    }),
+
+  finalizarSesion: (
+    sesionId: string,
+    grabacionUrl?: string,
+  ) =>
+    apiFetch<void>("/meet/end-session", {
+      method: "POST",
+      body: JSON.stringify({
+        sesionId,
+        ...(grabacionUrl ? { grabacionUrl } : {}),
+      }),
+    }),
 };

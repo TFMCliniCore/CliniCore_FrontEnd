@@ -1,4 +1,4 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-gateway-5pb1.onrender.com/api/v1';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002/api/v1';
 
 // Función para sanitizar payloads y evitar errores de 'forbidNonWhitelisted' en NestJS
 function sanitizarUsuarioDto(data: Record<string, any>) {
