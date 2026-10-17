@@ -32,9 +32,7 @@ const MODULES = [
   "Reportes",
 ];
 
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ||
-  "https://api-gateway-5pb1.onrender.com/api/v1";
+const API_URL = "http://localhost:3010/api/v1";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -64,7 +62,8 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ 
           email, 
-          contrasena: password 
+          password: password,   // 👈 Para el DTO que espera inglés
+          contrasena: password  // 👈 Para el DTO que espera español
         }),
       });
 

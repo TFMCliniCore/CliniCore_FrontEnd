@@ -250,6 +250,8 @@ export default function PosPage() {
 
     const pagoEfectivo = pagosRegistrados.find(p => p.metodoPagoId === 1);
     const totalRedondeado = Math.round(total * 100) / 100;
+    const subtotalRedondeado = Math.round(subtotal * 100) / 100;
+    const impuestoRedondeado = Math.round(impuesto * 100) / 100;
     
     let metodoPagoRaiz = 2;
     if (pagosRegistrados.length > 1) {
@@ -262,12 +264,12 @@ export default function PosPage() {
       ? pagoEfectivo.montoRecibido 
       : totalRedondeado;
 
+    // 🛠️ Payload ajustado estrictamente al DTO del microservicio de ventas
     const payloadVenta = {
       tipoComprobante: tipoComprobanteSeleccionado, 
       clienteId: 1, 
-      total: totalRedondeado,                                 
-      montoPagadoCon: Math.round(montoRecibido * 100) / 100,                
-      metodoPagoId: metodoPagoRaiz, 
+      total: totalRedondeado,                                       
+      montoPagadoCon: Math.round(montoRecibido * 100) / 100,              
       pagos: pagosRegistrados.map(p => ({
         metodoPagoId: Number(p.metodoPagoId),
         monto: Math.round(Number(p.monto) * 100) / 100,
