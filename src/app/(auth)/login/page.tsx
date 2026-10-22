@@ -32,7 +32,7 @@ const MODULES = [
   "Reportes",
 ];
 
-const API_URL = "http://localhost:3010/api/v1";
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "https://api-gateway-5pb1.onrender.com/api/v1";
 
 export default function LoginPage() {
   const router = useRouter();
