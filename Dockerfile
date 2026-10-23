@@ -9,7 +9,7 @@ RUN npm install --legacy-peer-deps
 COPY . .
 
 # 👈 Aseguramos que por defecto apunte al puerto 3010 de tu API Gateway local
-ARG NEXT_PUBLIC_API_URL=http://localhost:3010/api/v1
+ARG NEXT_PUBLIC_API_URL=https://api-gateway-5pb1.onrender.com/api/v1
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npx next build
